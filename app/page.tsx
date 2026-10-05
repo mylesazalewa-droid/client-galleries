@@ -42,6 +42,10 @@ export default async function Home() {
         </p>
       )}
 
+      <p className="foot" style={{ marginTop: 80 }}>
+        <a href="/admin">Owner sign in</a>
+      </p>
+
       {isDemo && (
         <div className="notice">
           <b>Demo mode.</b> These galleries use sample media until Google Drive is connected. The second gallery&apos;s password is <code>demo</code>.{" "}
