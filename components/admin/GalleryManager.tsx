@@ -58,6 +58,20 @@ export default function GalleryManager({ gallery, demo }: { gallery: G; demo: bo
     return true;
   }
 
+  async function rename(item: MediaItem, name: string) {
+    const res = await api(`/api/admin/files/${item.id}?g=${g.id}`, { method: "PATCH", body: JSON.stringify({ name }) });
+    if (!res.ok) { say(res.error || "Couldn't rename"); return false; }
+    const swap = (i: MediaItem) => (i.id === item.id ? { ...i, name: res.name } : i);
+    setG((cur) => ({
+      ...cur,
+      items: cur.items.map(swap),
+      cover: cur.cover ? swap(cur.cover) : cur.cover,
+      settings: cur.settings.cover === item.name ? { ...cur.settings, cover: res.name } : cur.settings,
+    }));
+    say("Renamed");
+    return true;
+  }
+
   async function remove(item: MediaItem) {
     const res = await api(`/api/admin/files/${item.id}?g=${g.id}`, { method: "DELETE" });
     if (!res.ok) return say(res.error || "Couldn't remove");
@@ -101,6 +115,7 @@ export default function GalleryManager({ gallery, demo }: { gallery: G; demo: bo
                   isCover={item.id === coverId}
                   onCover={() => save({ cover: item.name }, "Cover updated")}
                   onRemove={() => remove(item)}
+                  onRename={(name) => rename(item, name)}
                 />
               ))}
             </div>
@@ -240,9 +255,28 @@ function Uploader({ galleryId, demo, onDone, say }: { galleryId: string; demo: b
 
 // ------------------------------------------------------------------ thumbnails
 
-function Thumb({ item, isCover, onCover, onRemove }: { item: MediaItem; isCover: boolean; onCover: () => void; onRemove: () => void }) {
+function Thumb({ item, isCover, onCover, onRemove, onRename }: { item: MediaItem; isCover: boolean; onCover: () => void; onRemove: () => void; onRename: (name: string) => Promise<boolean> }) {
   const [confirm, setConfirm] = useState(false);
   const [broken, setBroken] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const ext = item.name.match(/\.[a-z0-9]{2,5}$/i)?.[0] ?? "";
+  const base = ext ? item.name.slice(0, -ext.length) : item.name;
+  const busy = useRef(false);
+  async function commit() {
+    if (busy.current) return;
+    const next = draft.trim();
+    if (!next || next === base) return setEditing(false);
+    busy.current = true;
+    const ok = await onRename(next);
+    busy.current = false;
+    if (ok) setEditing(false);
+  }
+  function cancel() {
+    busy.current = true; // keeps the blur that follows from saving
+    setEditing(false);
+    setTimeout(() => (busy.current = false), 0);
+  }
   return (
     <figure className="mthumb">
       <div className="mthumb-img">
@@ -251,8 +285,23 @@ function Thumb({ item, isCover, onCover, onRemove }: { item: MediaItem; isCover:
         {isCover && <span className="tag cover-tag">Cover</span>}
       </div>
       <figcaption>
-        <span className="mthumb-name" title={item.name}>{item.name}</span>
+        {editing ? (
+          <form className="rename" onSubmit={(e) => { e.preventDefault(); commit(); }}>
+            <input
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => e.key === "Escape" && cancel()}
+              onBlur={commit}
+              aria-label="New file name"
+            />
+            {ext && <span className="ext">{ext}</span>}
+          </form>
+        ) : (
+          <button className="mthumb-name" title="Click to rename" onClick={() => { setDraft(base); setEditing(true); }}>{item.name}</button>
+        )}
         <span className="mthumb-actions">
+          {!editing && <button className="link-btn" onClick={() => { setDraft(base); setEditing(true); }}>Rename</button>}
           {item.kind === "photo" && !isCover && <button className="link-btn" onClick={onCover}>Make cover</button>}
           {confirm ? (
             <>

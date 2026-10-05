@@ -161,6 +161,7 @@ export default function GalleryView({ gallery, studio }: { gallery: Gallery; stu
                 fav={favs[item.id]}
                 onOpen={() => openAt(i)}
                 onFav={() => toggleFav(item.id)}
+                canDownload={gallery.allowDownload}
               />
             ))}
           </div>
@@ -217,7 +218,7 @@ function Tab({ on, onClick, n, icon, children }: { on: boolean; onClick: () => v
   );
 }
 
-function Tile({ item, delay, fav, onOpen, onFav }: { item: MediaItem; delay: number; fav?: Fav; onOpen: () => void; onFav: () => void }) {
+function Tile({ item, delay, fav, onOpen, onFav, canDownload }: { item: MediaItem; delay: number; fav?: Fav; onOpen: () => void; onFav: () => void; canDownload: boolean }) {
   const [loaded, setLoaded] = useState(false);
   const r = item.width / item.height;
   return (
@@ -256,6 +257,18 @@ function Tile({ item, delay, fav, onOpen, onFav }: { item: MediaItem; delay: num
       >
         <Heart filled={!!fav} />
       </button>
+      {canDownload && (
+        <a
+          className="dl"
+          href={item.download}
+          download={item.name}
+          onClick={(e) => e.stopPropagation()}
+          aria-label={`Download ${item.name}`}
+          title="Download"
+        >
+          <Download />
+        </a>
+      )}
     </div>
   );
 }

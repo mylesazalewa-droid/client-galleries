@@ -138,6 +138,15 @@ img { display: block; }
 .tile:hover .fav, .tile .fav.on, .tile:focus-within .fav { opacity: 1; transform: none; }
 .tile .fav.on { color: var(--heart); background: rgba(255,255,255,.92); }
 .tile .fav svg { width: 17px; height: 17px; }
+.tile .dl {
+  position: absolute; right: 8px; bottom: 8px; z-index: 2;
+  width: 36px; height: 36px; border-radius: 999px; display: grid; place-items: center;
+  color: #fff; background: rgba(0,0,0,.28); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  opacity: 0; transform: scale(.9); transition: opacity .2s, transform .2s, background .2s;
+}
+.tile:hover .dl, .tile:focus-within .dl { opacity: 1; transform: none; }
+.tile .dl:hover { background: rgba(0,0,0,.5); }
+.tile .dl svg { width: 17px; height: 17px; }
 .tile .note-dot { position: absolute; top: 14px; right: 50px; z-index: 2; width: 24px; height: 24px; border-radius: 999px; display: grid; place-items: center; background: rgba(255,255,255,.92); color: #222; }
 .tile .note-dot svg { width: 13px; height: 13px; }
 .tile .play { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 1; }
@@ -254,6 +263,7 @@ img { display: block; }
   .tab .label-long { display: none; }
   .tile .fav { opacity: 1; transform: none; width: 32px; height: 32px; top: 5px; right: 5px; background: rgba(0,0,0,.2); }
   .tile .fav:not(.on) { opacity: .85; }
+  .tile .dl { opacity: .85; transform: none; width: 32px; height: 32px; right: 5px; bottom: 5px; background: rgba(0,0,0,.2); }
   .tile .play span { width: 44px; height: 44px; }
   .lb-arrow { display: none; }
   .lb.is-video .lb-arrow { display: grid; width: 40px; height: 40px; top: 18px; transform: none; background: rgba(0,0,0,.45); }
@@ -339,8 +349,13 @@ img { display: block; }
 .mthumb-play { position: absolute; left: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; color: #fff; padding: 3px 8px; border-radius: 999px; background: rgba(0,0,0,.55); }
 .mthumb-play svg { width: 10px; height: 10px; }
 .cover-tag { position: absolute; top: 8px; left: 8px; background: var(--accent); color: var(--accent-ink); }
-.mthumb figcaption { padding: 8px 10px 10px; display: grid; gap: 4px; }
-.mthumb-name { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mthumb figcaption { padding: 8px 10px 10px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.mthumb-name { font: inherit; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 0; background: none; padding: 0; text-align: left; cursor: text; color: var(--text); }
+.mthumb-name:hover { text-decoration: underline dotted; }
+.rename { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.mthumb figcaption > * { min-width: 0; }
+.rename input { flex: 1; min-width: 0; font: inherit; font-size: 12.5px; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--accent); background: var(--bg); color: var(--text); outline: none; }
+.rename .ext { font-size: 12px; color: var(--muted); }
 .mthumb-actions { display: flex; gap: 10px; }
 .link-btn { border: 0; background: none; padding: 0; font-size: 12.5px; color: var(--muted); cursor: pointer; }
 .link-btn:hover { color: var(--text); text-decoration: underline; }

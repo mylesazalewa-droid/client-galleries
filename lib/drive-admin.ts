@@ -100,6 +100,7 @@ export async function createGallery(token: string, title: string, settings: Gall
   return folder.id;
 }
 
+/** Renames a folder or file. */
 export async function renameFolder(token: string, id: string, title: string) {
   await call(token, `${API}/files/${id}`, { method: "PATCH", body: JSON.stringify({ name: title.trim() }) });
 }
