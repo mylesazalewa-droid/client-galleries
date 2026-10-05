@@ -6,7 +6,7 @@ const ERRORS: Record<string, string> = {
   cancelled: "Sign-in was cancelled.",
   state: "Sign-in expired. Try again.",
   google: "Google didn't complete the sign-in. Try again.",
-  scope: "Please allow access to Google Drive when signing in — uploads need it.",
+  scope: "Google Drive access wasn't ticked. Sign in again and, on Google's permissions screen, tick the Google Drive box (or \"Select all\") before clicking Continue.",
   setup: "Google sign-in isn't configured yet.",
 };
 
