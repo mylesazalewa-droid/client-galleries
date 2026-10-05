@@ -28,10 +28,9 @@ export async function stripe<T = Record<string, unknown>>(path: string, params?:
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg: string = json?.error?.message ?? `Stripe error (${res.status})`;
-    if (res.status === 403 || /permission/i.test(msg)) {
-      throw new StripeError(403, "Your Stripe key needs more permissions: Products, Prices and Payment Links set to Write, and Checkout Sessions set to Read.");
-    }
-    throw new StripeError(res.status, msg);
+    console.error("stripe", method, path, res.status, msg);
+    if (res.status === 401) throw new StripeError(401, `Stripe didn't accept the key in Vercel (STRIPE_SECRET_KEY). ${msg}`);
+    throw new StripeError(res.status, `Stripe: ${msg}`);
   }
   return json as T;
 }
