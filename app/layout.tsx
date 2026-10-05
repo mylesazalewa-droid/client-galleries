@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { getStudio, inkFor } from "@/lib/brand";
 import { studio } from "@/lib/config";
 import "./globals.css";
 
@@ -18,9 +19,12 @@ export const viewport: Viewport = {
 // Applies the saved theme before first paint so there's no flash.
 const themeScript = `try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}`;
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Your accent color (set in the dashboard) replaces the default in both light and dark mode.
+  const { accent } = await getStudio().catch(() => ({ accent: undefined }));
+  const style = accent ? ({ "--accent": accent, "--accent-ink": inkFor(accent) } as React.CSSProperties) : undefined;
   return (
-    <html lang="en" data-theme="dark" suppressHydrationWarning>
+    <html lang="en" data-theme="dark" suppressHydrationWarning style={style}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />

@@ -3,7 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import GalleryManager from "@/components/admin/GalleryManager";
 import { studio } from "@/lib/config";
-import { getRecordById } from "@/lib/galleries";
+import { readActivity } from "@/lib/activity";
+import { getRecordById, isExpired } from "@/lib/galleries";
 import { currentOwner } from "@/lib/owner";
 
 export const dynamic = "force-dynamic";
@@ -14,11 +15,16 @@ export default async function ManagePage({ params }: { params: Promise<{ id: str
   if (!owner) redirect("/admin");
   const g = await getRecordById((await params).id, true);
   if (!g) notFound();
+  const activity = (await readActivity().catch(() => []))
+    .filter((r) => r.galleryId === g.id)
+    .slice(0, 15)
+    .map(({ time, event, detail, visitor }) => ({ time, event, detail: detail.slice(0, 220), visitor }));
 
   return (
     <AdminShell studio={studio} email={owner.email} demo={owner.demo} back>
       <GalleryManager
         demo={owner.demo}
+        activity={activity}
         gallery={{
           id: g.id,
           slug: g.slug,
@@ -27,6 +33,8 @@ export default async function ManagePage({ params }: { params: Promise<{ id: str
           hidden: !!g.hidden,
           items: g.items,
           cover: g.cover ?? null,
+          sections: g.sections,
+          expired: isExpired(g.settings),
         }}
       />
     </AdminShell>

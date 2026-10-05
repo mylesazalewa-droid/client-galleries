@@ -10,5 +10,5 @@ export async function POST(req: Request) {
   clearCache();
   await loadAll(true);
   const g = galleryId ? await getRecordById(String(galleryId)) : null;
-  return Response.json({ ok: true, items: g?.items ?? [], cover: g?.cover ?? null });
+  return Response.json({ ok: true, items: g?.items ?? [], cover: g?.cover ?? null, sections: g?.sections ?? [] });
 }

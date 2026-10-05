@@ -104,6 +104,16 @@ Copy `.env.example` to `.env.local` and fill in:
 
 ---
 
+## Dashboard features
+
+- **Sections**: add sections (Final cuts, Social versions, Stills…) to a gallery; they're subfolders in Drive. Choose a section above the drop zone to upload into it, or use “Move…” on any file.
+- **Closes on**: after that date clients see a “gallery closed” page and files stop loading. Clear the date to reopen.
+- **Hold downloads until paid**: clients get watermarked, reduced-size previews and no downloads. Click **Mark as paid** to unlock everything.
+- **Favorites & picks**: off by default (galleries are for finished deliverables); turn on per gallery if you want clients to heart and send picks.
+- **Activity**: views, unlocks, downloads and picks go to the **Client Galleries — Activity** sheet inside CLIENTS, and show on the dashboard. For email alerts, open the sheet → Tools → Notification settings → Edit notifications → “Any changes are made” → “Email – daily digest” (or “right away”).
+- **Branding**: dashboard → Branding: studio name, tagline, landing headline, contact email, website, accent color, logo and a landing background (photo or short muted reel). Saved in CLIENTS/brand.json and CLIENTS/_brand.
+- **Owner preview**: when you're signed in you see everything; use “See what clients see” (or add `?as=client` to a gallery link) to check the password screen, watermarks and expiry.
+
 ## Good to know
 
 - **Export video as H.264 MP4.** Browsers can't play ProRes, and HEVC only plays in Safari. Drive also needs a few minutes after upload to generate a video's poster frame.

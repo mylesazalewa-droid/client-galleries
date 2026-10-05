@@ -2,7 +2,7 @@ import "server-only";
 import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import { cookieSecret } from "./config";
-import type { GalleryRecord } from "./galleries";
+import { isExpired, type GalleryRecord } from "./galleries";
 import { readSession } from "./owner";
 
 export const cookieName = (slug: string) => `gal_${slug}`;
@@ -18,12 +18,23 @@ export function passwordMatches(g: GalleryRecord, attempt: string) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-export async function canView(g: GalleryRecord) {
+export async function canView(g: GalleryRecord, opts: { ignoreOwner?: boolean } = {}) {
   if (!g.settings.password) return true;
-  if (await readSession()) return true; // the owner sees everything
+  if (!opts.ignoreOwner && (await readSession())) return true; // the owner sees everything
   const jar = await cookies();
   const value = jar.get(cookieName(g.slug))?.value;
   if (!value) return false;
   const expected = tokenFor(g);
   return value.length === expected.length && timingSafeEqual(Buffer.from(value), Buffer.from(expected));
+}
+
+/** Who is looking and what they're allowed: the owner bypasses expiry, payment hold and passwords. */
+export async function viewerState(g: GalleryRecord) {
+  const owner = !!(await readSession());
+  return {
+    owner,
+    expired: !owner && isExpired(g.settings),
+    hold: !owner && !!g.settings.hold,
+    canDownload: owner || (g.settings.downloads !== false && !g.settings.hold),
+  };
 }

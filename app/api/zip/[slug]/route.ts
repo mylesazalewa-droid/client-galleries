@@ -1,6 +1,7 @@
 import archiver from "archiver";
 import { Readable } from "stream";
-import { canView } from "@/lib/access";
+import { canView, viewerState } from "@/lib/access";
+import { logEvent } from "@/lib/activity";
 import { isDemo } from "@/lib/config";
 import { getRecord } from "@/lib/galleries";
 import { driveMedia } from "@/lib/google";
@@ -15,10 +16,17 @@ export async function GET(req: Request, ctx: { params: Promise<{ slug: string }>
   const g = await getRecord(slug);
   if (!g) return new Response("Not found", { status: 404 });
   if (!(await canView(g))) return new Response("Locked", { status: 401 });
-  if (g.settings.downloads === false) return new Response("Downloads are off", { status: 403 });
+  const v = await viewerState(g);
+  if (v.expired) return new Response("This gallery has closed", { status: 410 });
+  if (!v.canDownload) return new Response("Downloads aren't available for this gallery yet", { status: 403 });
 
   const only = new URL(req.url).searchParams.get("only");
-  const items = g.items.filter((i) => !only || (only === "photos" ? i.kind === "photo" : i.kind === "video"));
+  const section = new URL(req.url).searchParams.get("section");
+  const items = g.items
+    .filter((i) => !only || (only === "photos" ? i.kind === "photo" : i.kind === "video"))
+    .filter((i) => section === null || i.section === section);
+  const sectionName = section ? g.sections.find((s) => s.id === section)?.name : undefined;
+  await logEvent(req, { galleryId: g.id, title: g.title, event: "Downloaded all", detail: [sectionName, only, `${items.length} files`].filter(Boolean).join(" · ") });
 
   // Media is already compressed, so store without re-compressing (much faster).
   const archive = archiver("zip", { store: true });
@@ -60,7 +68,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ slug: string }>
   return new Response(Readable.toWeb(archive) as ReadableStream, {
     headers: {
       "Content-Type": "application/zip",
-      "Content-Disposition": disposition(`${g.title}${only ? ` (${only})` : ""}.zip`),
+      "Content-Disposition": disposition(`${g.title}${sectionName ? ` - ${sectionName}` : ""}${only ? ` (${only})` : ""}.zip`),
       "Cache-Control": "private, no-store",
     },
   });

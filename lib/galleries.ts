@@ -3,7 +3,7 @@ import { createHash } from "crypto";
 import { cacheTtl, isDemo, rootFolderIdEnv, rootFolderName } from "./config";
 import { demoGalleries } from "./demo";
 import { drive } from "./google";
-import type { Gallery, GallerySettings, GallerySummary, MediaItem } from "./types";
+import type { Gallery, GallerySettings, GallerySummary, MediaItem, Section } from "./types";
 
 /**
  * Internal record of a gallery. Holds the password, which never leaves the server.
@@ -18,9 +18,21 @@ export type GalleryRecord = {
   /** Drafts: folder name starts with "_" or gallery.json has "hidden": true. Only the owner sees them. */
   hidden?: boolean;
   settingsFileId?: string;
+  /** Subfolders of the gallery, shown as sections */
+  sections: Section[];
 };
 
+/** Folders/files inside CLIENTS that aren't galleries. */
+export const BRAND_FOLDER = "_brand";
+
+export function isExpired(s: GallerySettings, now = new Date()) {
+  if (!s.expires) return false;
+  const end = new Date(`${s.expires}T23:59:59`);
+  return !isNaN(+end) && now > end;
+}
+
 export const SETTINGS_FILE = "gallery.json";
+export const FOLDER_MIME = "application/vnd.google-apps.folder";
 const IMAGE = /^image\/(jpeg|png|webp|heic|heif|gif|tiff)$/;
 const VIDEO = /^video\//;
 
@@ -100,20 +112,27 @@ export function toSummary(g: GalleryRecord): GallerySummary {
   };
 }
 
-export function toGallery(g: GalleryRecord): Gallery {
+/** What the client sees. `asOwner` keeps downloads on for you even while a payment hold is active. */
+
+export function toGallery(g: GalleryRecord, asOwner = false): Gallery {
+  const hold = !!g.settings.hold;
   return {
     ...toSummary(g),
     message: g.settings.message,
-    allowDownload: g.settings.downloads !== false,
+    allowDownload: g.settings.downloads !== false && (!hold || asOwner),
+    hold,
+    picks: !!g.settings.picks,
+    expires: g.settings.expires,
     cover: g.cover ?? g.items.find((i) => i.kind === "photo") ?? g.items[0],
     items: g.items,
+    sections: g.sections,
     zip: `/api/zip/${g.slug}`,
   };
 }
 
 // ---------------------------------------------------------------- Google Drive
 
-type DriveFile = {
+export type DriveFile = {
   id?: string | null;
   name?: string | null;
   mimeType?: string | null;
@@ -121,7 +140,7 @@ type DriveFile = {
   videoMediaMetadata?: { width?: number | null; height?: number | null; durationMillis?: string | null } | null;
 };
 
-async function listChildren(q: string) {
+export async function listChildren(q: string) {
   const files: DriveFile[] = [];
   let pageToken: string | undefined;
   do {
@@ -154,7 +173,7 @@ async function readSettings(fileId: string): Promise<GallerySettings> {
   }
 }
 
-function toItem(f: DriveFile, slug: string): MediaItem | null {
+function toItem(f: DriveFile, slug: string, section = ""): MediaItem | null {
   if (!f.id || !f.name || !f.mimeType) return null;
   const q = `g=${encodeURIComponent(slug)}`;
   const base = {
@@ -163,6 +182,7 @@ function toItem(f: DriveFile, slug: string): MediaItem | null {
     thumb: `/api/media/${f.id}?${q}&s=900`,
     full: `/api/media/${f.id}?${q}&s=2400`,
     download: `/api/download/${f.id}?${q}`,
+    section,
   };
   if (IMAGE.test(f.mimeType)) {
     const m = f.imageMediaMetadata ?? {};
@@ -207,18 +227,26 @@ async function loadFromDrive(force = false): Promise<GalleryRecord[]> {
 
   const records = await Promise.all(
     folders
-      .filter((f) => f.id && f.name)
+      .filter((f) => f.id && f.name && f.name !== BRAND_FOLDER)
       .map(async (folder): Promise<GalleryRecord> => {
         const title = folder.name!.replace(/^_+\s*/, "");
         const slug = slugFor(title, folder.id!);
         const files = await listChildren(`'${folder.id}' in parents and trashed=false`);
         const settingsFile = files.find((f) => f.name === SETTINGS_FILE);
-        const settings = settingsFile?.id ? await readSettings(settingsFile.id) : {};
+        const visible = (f: DriveFile) => !f.name?.startsWith("_") && !f.name?.startsWith(".");
 
-        const media = files
-          .filter((f) => !f.name?.startsWith("_") && !f.name?.startsWith("."))
-          .map((f) => toItem(f, slug))
-          .filter((x): x is MediaItem => !!x);
+        // Subfolders are sections ("Final cuts", "Social versions", "Stills"…), in name order.
+        const sectionFolders = files.filter((f) => f.mimeType === FOLDER_MIME && f.id && visible(f));
+        const [settings, sectionFiles] = await Promise.all([
+          settingsFile?.id ? readSettings(settingsFile.id) : Promise.resolve({} as GallerySettings),
+          Promise.all(sectionFolders.map((sf) => listChildren(`'${sf.id}' in parents and trashed=false`))),
+        ]);
+        const sections: Section[] = sectionFolders.map((sf) => ({ id: sf.id!, name: sf.name! }));
+
+        const media = [
+          ...files.filter(visible).map((f) => toItem(f, slug)),
+          ...sectionFolders.flatMap((sf, i) => sectionFiles[i].filter(visible).map((f) => toItem(f, slug, sf.id!))),
+        ].filter((x): x is MediaItem => !!x);
 
         // A file named cover.* (or the one named in gallery.json) becomes the hero, not a grid item.
         const coverName = settings.cover?.toLowerCase();
@@ -229,7 +257,7 @@ async function loadFromDrive(force = false): Promise<GalleryRecord[]> {
         const items = settings.cover ? media : media.filter((i) => i !== cover);
 
         const hidden = folder.name!.startsWith("_") || settings.hidden === true;
-        return { id: folder.id!, slug, title, settings, items, cover, hidden, settingsFileId: settingsFile?.id ?? undefined };
+        return { id: folder.id!, slug, title, settings, items, cover, hidden, sections, settingsFileId: settingsFile?.id ?? undefined };
       }),
   );
 

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatDate, plural } from "@/lib/format";
 import { Lock, Photo } from "../icons";
 import CopyLink from "./CopyLink";
@@ -17,10 +17,47 @@ export type DashGallery = {
   photos: number;
   videos: number;
   coverThumb?: string;
+  expired: boolean;
+  hold: boolean;
+  expires?: string;
+  views: number;
+  downloads: number;
+  lastOpened?: string;
 };
 
-export default function Dashboard({ galleries, demo, loadError, rootMissing }: { galleries: DashGallery[]; demo: boolean; loadError: string; rootMissing: boolean }) {
+type Props = {
+  galleries: DashGallery[];
+  demo: boolean;
+  loadError: string;
+  rootMissing: boolean;
+  /** link to the activity Google Sheet, or null when it still needs creating */
+  activityUrl: string | null;
+};
+
+export function ago(iso?: string) {
+  if (!iso) return "";
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 90) return "just now";
+  const m = s / 60, h = m / 60, d = h / 24;
+  if (m < 60) return `${Math.round(m)} min ago`;
+  if (h < 24) return `${Math.round(h)} hr ago`;
+  if (d < 30) return `${Math.round(d)} day${Math.round(d) === 1 ? "" : "s"} ago`;
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+export default function Dashboard({ galleries, demo, loadError, rootMissing, activityUrl }: Props) {
   const [creating, setCreating] = useState(false);
+  const router = useRouter();
+
+  // First visit after connecting Google: create the CLIENTS folder and activity sheet.
+  useEffect(() => {
+    if (demo || activityUrl || loadError) return;
+    try {
+      if (sessionStorage.getItem("setup-done")) return;
+      sessionStorage.setItem("setup-done", "1");
+    } catch {}
+    fetch("/api/admin/setup", { method: "POST" }).then((r) => r.json()).then((r) => r.ok && router.refresh()).catch(() => {});
+  }, [demo, activityUrl, loadError, router]);
 
   return (
     <>
@@ -29,7 +66,11 @@ export default function Dashboard({ galleries, demo, loadError, rootMissing }: {
           <div className="eyebrow">{plural(galleries.length, "gallery", "galleries")}</div>
           <h1 className="serif">Client galleries</h1>
         </div>
-        <button className="btn primary" onClick={() => setCreating(true)}>+ New gallery</button>
+        <div className="admin-head-actions">
+          {activityUrl && <a className="btn" href={activityUrl} target="_blank" rel="noreferrer">Activity sheet ↗</a>}
+          <Link className="btn" href="/admin/brand">Branding</Link>
+          <button className="btn primary" onClick={() => setCreating(true)}>+ New gallery</button>
+        </div>
       </div>
 
       {loadError && <p className="error">{loadError}</p>}
@@ -47,6 +88,8 @@ export default function Dashboard({ galleries, demo, loadError, rootMissing }: {
                 {g.coverThumb ? <img src={g.coverThumb} alt="" loading="lazy" /> : <span className="dash-empty"><Photo /> No media yet</span>}
                 <span className="dash-tags">
                   {g.hidden && <span className="tag">Draft</span>}
+                  {g.expired && <span className="tag warn">Expired</span>}
+                  {g.hold && <span className="tag">Awaiting payment</span>}
                   {g.locked && <span className="tag"><Lock /> Password</span>}
                 </span>
               </Link>
@@ -56,6 +99,10 @@ export default function Dashboard({ galleries, demo, loadError, rootMissing }: {
                   {[g.client, formatDate(g.date), [g.photos && plural(g.photos, "photo"), g.videos && plural(g.videos, "film")].filter(Boolean).join(", ") || "Empty"]
                     .filter(Boolean)
                     .join(" · ")}
+                </div>
+                <div className="dash-stats">
+                  {g.views ? <>Opened {plural(g.views, "time")}{g.lastOpened ? `, last ${ago(g.lastOpened)}` : ""}</> : "Not opened yet"}
+                  {g.downloads ? <> · {plural(g.downloads, "download")}</> : null}
                 </div>
                 <div className="dash-actions">
                   <Link href={`/admin/g/${g.id}`} className="btn">Manage</Link>
@@ -83,7 +130,7 @@ function NewGallery({ demo, onClose }: { demo: boolean; onClose: () => void }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const [f, setF] = useState({ title: "", client: "", date: new Date().toISOString().slice(0, 10), password: "", message: "" });
+  const [f, setF] = useState({ title: "", client: "", date: new Date().toISOString().slice(0, 10), password: "", message: "", expires: "" });
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
 
   async function submit(e: React.FormEvent) {
@@ -115,11 +162,16 @@ function NewGallery({ demo, onClose }: { demo: boolean; onClose: () => void }) {
             <input type="date" value={f.date} onChange={set("date")} />
           </label>
         </div>
-        <label className="field"><span>Password (optional)</span>
-          <input value={f.password} onChange={set("password")} placeholder="Leave blank for link-only access" autoComplete="off" />
-        </label>
+        <div className="field-row">
+          <label className="field"><span>Password (optional)</span>
+            <input value={f.password} onChange={set("password")} placeholder="Link-only access" autoComplete="off" />
+          </label>
+          <label className="field"><span>Closes on (optional)</span>
+            <input type="date" value={f.expires} onChange={set("expires")} min={new Date().toISOString().slice(0, 10)} />
+          </label>
+        </div>
         <label className="field"><span>Welcome message (optional)</span>
-          <textarea value={f.message} onChange={set("message")} placeholder="Final cuts and stills from the shoot. Heart your favorites and send your picks." />
+          <textarea value={f.message} onChange={set("message")} placeholder="Your final films and stills are ready to download." />
         </label>
         {demo && <p className="error">Demo mode — connect Google to create galleries.</p>}
         {err && <p className="error" role="alert">{err}</p>}

@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatDuration, plural } from "@/lib/format";
-import type { GallerySettings, MediaItem } from "@/lib/types";
+import type { GallerySettings, MediaItem, Section } from "@/lib/types";
 import { Check, Close, Download, Play } from "../icons";
 import CopyLink from "./CopyLink";
 
@@ -14,9 +14,13 @@ type G = {
   hidden: boolean;
   items: MediaItem[];
   cover: MediaItem | null;
+  sections: Section[];
+  expired: boolean;
 };
 
-type Job = { key: string; name: string; size: number; progress: number; state: "waiting" | "uploading" | "done" | "error"; error?: string };
+export type ActivityItem = { time: string; event: string; detail: string; visitor: string };
+
+type Job = { key: string; name: string; size: number; folderId?: string; progress: number; state: "waiting" | "uploading" | "done" | "error"; error?: string };
 
 const CONCURRENCY = 3;
 
@@ -26,9 +30,10 @@ async function api(url: string, init: RequestInit = {}) {
     .catch(() => ({ ok: false, error: "Couldn't connect. Try again." }));
 }
 
-export default function GalleryManager({ gallery, demo }: { gallery: G; demo: boolean }) {
+export default function GalleryManager({ gallery, demo, activity }: { gallery: G; demo: boolean; activity: ActivityItem[] }) {
   const router = useRouter();
   const [g, setG] = useState(gallery);
+  const [target, setTarget] = useState(""); // "" = main area, otherwise a section id
   const [toast, setToast] = useState("");
   const say = useCallback((t: string) => { setToast(t); setTimeout(() => setToast(""), 3200); }, []);
 
@@ -38,7 +43,38 @@ export default function GalleryManager({ gallery, demo }: { gallery: G; demo: bo
 
   async function refresh() {
     const res = await api("/api/admin/refresh", { method: "POST", body: JSON.stringify({ galleryId: g.id }) });
-    if (res.ok) setG((cur) => ({ ...cur, items: res.items, cover: res.cover }));
+    if (res.ok) setG((cur) => ({ ...cur, items: res.items, cover: res.cover, sections: res.sections ?? cur.sections }));
+  }
+
+  async function addSection(name: string) {
+    const res = await api("/api/admin/sections", { method: "POST", body: JSON.stringify({ galleryId: g.id, name }) });
+    if (!res.ok) { say(res.error || "Couldn't add section"); return false; }
+    setG((cur) => ({ ...cur, sections: [...cur.sections, res.section] }));
+    setTarget(res.section.id);
+    say(`Added “${res.section.name}”`);
+    return true;
+  }
+
+  async function renameSection(sec: Section, name: string) {
+    const res = await api(`/api/admin/sections/${sec.id}?g=${g.id}`, { method: "PATCH", body: JSON.stringify({ name }) });
+    if (!res.ok) { say(res.error || "Couldn't rename"); return false; }
+    setG((cur) => ({ ...cur, sections: cur.sections.map((x) => (x.id === sec.id ? { ...x, name: res.name } : x)) }));
+    return true;
+  }
+
+  async function deleteSection(sec: Section) {
+    const res = await api(`/api/admin/sections/${sec.id}?g=${g.id}`, { method: "DELETE" });
+    if (!res.ok) return say(res.error || "Couldn't delete");
+    setG((cur) => ({ ...cur, sections: cur.sections.filter((x) => x.id !== sec.id), items: cur.items.filter((i) => i.section !== sec.id) }));
+    if (target === sec.id) setTarget("");
+    say(`Deleted “${sec.name}” (it's in your Drive trash)`);
+  }
+
+  async function move(item: MediaItem, section: string) {
+    const res = await api(`/api/admin/files/${item.id}?g=${g.id}`, { method: "PATCH", body: JSON.stringify({ section }) });
+    if (!res.ok) return say(res.error || "Couldn't move");
+    setG((cur) => ({ ...cur, items: cur.items.map((i) => (i.id === item.id ? { ...i, section } : i)) }));
+    say(`Moved to ${section ? g.sections.find((x) => x.id === section)?.name : "Main"}`);
   }
 
   async function save(patch: Partial<GallerySettings> & { title?: string }, msg = "Saved") {
@@ -80,23 +116,36 @@ export default function GalleryManager({ gallery, demo }: { gallery: G; demo: bo
   }
 
   const invite = [
-    `Hi${g.settings.client ? ` ${g.settings.client}` : ""}! Your gallery "${g.title}" is ready:`,
+    `Hi${g.settings.client ? ` ${g.settings.client}` : ""}! Your files for "${g.title}" are ready:`,
     typeof window !== "undefined" ? `${location.origin}${link}` : link,
     g.settings.password ? `Password: ${g.settings.password}` : "",
-    "Tap the heart on anything you love and hit “Send picks” when you're done.",
+    g.settings.expires ? `The gallery is available until ${new Date(`${g.settings.expires}T12:00:00`).toLocaleDateString("en-US", { month: "long", day: "numeric" })}, so download what you need before then.` : "",
+    g.settings.picks ? "Tap the heart on anything you love and hit “Send picks” when you're done." : "",
   ].filter(Boolean).join("\n");
+
+  const status = [
+    g.hidden ? "Draft — only you can see it" : "Published",
+    g.expired && "Expired",
+    g.settings.hold && "Awaiting payment",
+    plural(g.items.length, "item"),
+  ].filter(Boolean).join(" · ");
+
+  // main area first, then sections
+  const groups = [{ id: "", name: "Main" }, ...g.sections].map((sec) => ({
+    ...sec,
+    items: media.filter((i) => (sec.id ? i.section === sec.id : !g.sections.some((x) => x.id === i.section))),
+  }));
 
   return (
     <div className="mgr">
       <section className="mgr-head">
         <div style={{ minWidth: 0 }}>
-          <div className="eyebrow">
-            {g.hidden ? "Draft — only you can see it" : "Published"} · {plural(g.items.length, "item")}
-          </div>
+          <div className="eyebrow">{status}</div>
           <h1 className="serif">{g.title}</h1>
         </div>
         <div className="mgr-share">
-          <a className="btn" href={link} target="_blank" rel="noreferrer">View as client ↗</a>
+          {g.settings.hold && <button className="btn" onClick={() => save({ hold: false }, "Marked as paid. Downloads are on.")}>Mark as paid</button>}
+          <a className="btn" href={`${link}?as=client`} target="_blank" rel="noreferrer">View as client ↗</a>
           <CopyLink path={link} />
           <CopyLink text={invite} label="Copy invite" className="btn primary" />
         </div>
@@ -104,21 +153,50 @@ export default function GalleryManager({ gallery, demo }: { gallery: G; demo: bo
 
       <div className="mgr-cols">
         <div className="mgr-main">
-          <Uploader galleryId={g.id} demo={demo} onDone={refresh} say={say} />
+          <SectionBar sections={g.sections} target={target} onTarget={setTarget} onAdd={addSection} demo={demo} />
+          <Uploader
+            galleryId={g.id}
+            folderId={target || undefined}
+            targetName={target ? g.sections.find((x) => x.id === target)?.name : undefined}
+            demo={demo}
+            onDone={refresh}
+            say={say}
+          />
 
-          {media.length ? (
-            <div className="mgr-grid">
-              {media.map((item) => (
-                <Thumb
-                  key={item.id}
-                  item={item}
-                  isCover={item.id === coverId}
-                  onCover={() => save({ cover: item.name }, "Cover updated")}
-                  onRemove={() => remove(item)}
-                  onRename={(name) => rename(item, name)}
-                />
-              ))}
-            </div>
+          {media.length || g.sections.length ? (
+            groups.map((grp) =>
+              !grp.id && !grp.items.length && g.sections.length ? null : (
+                <section key={grp.id || "main"} className="mgr-sec">
+                  {g.sections.length > 0 && (
+                    <SectionHead
+                      name={grp.name}
+                      count={grp.items.length}
+                      editable={!!grp.id}
+                      onRename={(name) => renameSection({ id: grp.id, name: grp.name }, name)}
+                      onDelete={() => deleteSection({ id: grp.id, name: grp.name })}
+                    />
+                  )}
+                  {grp.items.length ? (
+                    <div className="mgr-grid">
+                      {grp.items.map((item) => (
+                        <Thumb
+                          key={item.id}
+                          item={item}
+                          isCover={item.id === coverId}
+                          sections={g.sections}
+                          onCover={() => save({ cover: item.name }, "Cover updated")}
+                          onRemove={() => remove(item)}
+                          onRename={(name) => rename(item, name)}
+                          onMove={(sec) => move(item, sec)}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="hint">Empty. Choose this section above, then drop files in.</p>
+                  )}
+                </section>
+              ),
+            )
           ) : (
             <div className="empty" style={{ padding: "50px 20px" }}>
               <div className="serif">Nothing here yet</div>
@@ -129,6 +207,7 @@ export default function GalleryManager({ gallery, demo }: { gallery: G; demo: bo
 
         <aside className="mgr-side">
           <Settings g={g} onSave={save} />
+          <Activity items={activity} />
           <Danger g={g} demo={demo} say={say} onDeleted={() => { router.push("/admin"); router.refresh(); }} />
         </aside>
       </div>
@@ -140,7 +219,9 @@ export default function GalleryManager({ gallery, demo }: { gallery: G; demo: bo
 
 // ------------------------------------------------------------------ uploader
 
-function Uploader({ galleryId, demo, onDone, say }: { galleryId: string; demo: boolean; onDone: () => Promise<void> | void; say: (t: string) => void }) {
+function Uploader({ galleryId, folderId, targetName, demo, onDone, say }: {
+  galleryId: string; folderId?: string; targetName?: string; demo: boolean; onDone: () => Promise<void> | void; say: (t: string) => void;
+}) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [over, setOver] = useState(false);
   const files = useRef(new Map<string, File>());
@@ -154,7 +235,7 @@ function Uploader({ galleryId, demo, onDone, say }: { galleryId: string; demo: b
     update(job.key, { state: "uploading", progress: 0 });
     const start = await api("/api/admin/upload", {
       method: "POST",
-      body: JSON.stringify({ galleryId, name: file.name, type: file.type, size: file.size }),
+      body: JSON.stringify({ galleryId, folderId: job.folderId, name: file.name, type: file.type, size: file.size }),
     });
     if (!start.ok) return update(job.key, { state: "error", error: start.error });
 
@@ -202,7 +283,7 @@ function Uploader({ galleryId, demo, onDone, say }: { galleryId: string; demo: b
       if (!/^(image|video)\//.test(f.type)) { say(`${f.name} isn't a photo or video`); continue; }
       const key = `${f.name}-${f.size}-${f.lastModified}-${Math.random().toString(36).slice(2, 7)}`;
       files.current.set(key, f);
-      next.push({ key, name: f.name, size: f.size, progress: 0, state: "waiting" });
+      next.push({ key, name: f.name, size: f.size, folderId, progress: 0, state: "waiting" });
     }
     setJobs((js) => [...js, ...next]);
   }
@@ -223,7 +304,7 @@ function Uploader({ galleryId, demo, onDone, say }: { galleryId: string; demo: b
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && input.current?.click()}
       >
         <Download />
-        <b>Drop photos and films here</b>
+        <b>Drop photos and films here{targetName ? ` — into “${targetName}”` : ""}</b>
         <span>or click to choose · JPG, PNG, HEIC, MP4, MOV</span>
         <input ref={input} type="file" multiple accept="image/*,video/*" hidden onChange={(e) => { add(e.target.files); e.target.value = ""; }} />
       </div>
@@ -255,7 +336,10 @@ function Uploader({ galleryId, demo, onDone, say }: { galleryId: string; demo: b
 
 // ------------------------------------------------------------------ thumbnails
 
-function Thumb({ item, isCover, onCover, onRemove, onRename }: { item: MediaItem; isCover: boolean; onCover: () => void; onRemove: () => void; onRename: (name: string) => Promise<boolean> }) {
+function Thumb({ item, isCover, sections, onCover, onRemove, onRename, onMove }: {
+  item: MediaItem; isCover: boolean; sections: Section[];
+  onCover: () => void; onRemove: () => void; onRename: (name: string) => Promise<boolean>; onMove: (section: string) => void;
+}) {
   const [confirm, setConfirm] = useState(false);
   const [broken, setBroken] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -303,6 +387,18 @@ function Thumb({ item, isCover, onCover, onRemove, onRename }: { item: MediaItem
         <span className="mthumb-actions">
           {!editing && <button className="link-btn" onClick={() => { setDraft(base); setEditing(true); }}>Rename</button>}
           {item.kind === "photo" && !isCover && <button className="link-btn" onClick={onCover}>Make cover</button>}
+          {sections.length > 0 && !editing && (
+            <select
+              className="move"
+              value=""
+              onChange={(e) => e.target.value && onMove(e.target.value === "__main" ? "" : e.target.value)}
+              aria-label={`Move ${item.name} to a section`}
+            >
+              <option value="">Move…</option>
+              {item.section && <option value="__main">Main</option>}
+              {sections.filter((x) => x.id !== item.section).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+            </select>
+          )}
           {confirm ? (
             <>
               <button className="link-btn danger" onClick={onRemove}>Remove?</button>
@@ -328,6 +424,9 @@ function Settings({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings> & 
     message: g.settings.message ?? "",
     downloads: g.settings.downloads !== false,
     hidden: g.hidden,
+    expires: g.settings.expires ?? "",
+    hold: !!g.settings.hold,
+    picks: !!g.settings.picks,
   });
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -336,7 +435,7 @@ function Settings({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings> & 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    await onSave(f);
+    await onSave(f); // an empty date clears the expiry
     setBusy(false);
   }
 
@@ -347,10 +446,18 @@ function Settings({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings> & 
       <label className="field"><span>Client</span><input value={f.client} onChange={set("client")} /></label>
       <label className="field"><span>Date</span><input type="date" value={f.date} onChange={set("date")} /></label>
       <label className="field"><span>Password</span><input value={f.password} onChange={set("password")} placeholder="None — anyone with the link" autoComplete="off" /></label>
+      <label className="field"><span>Closes on</span>
+        <span className="field-inline">
+          <input type="date" value={f.expires} onChange={set("expires")} />
+          {f.expires && <button type="button" className="link-btn" onClick={() => setF({ ...f, expires: "" })}>Never</button>}
+        </span>
+      </label>
       <label className="field"><span>Welcome message</span><textarea value={f.message} onChange={set("message")} /></label>
       <label className="check"><input type="checkbox" checked={f.downloads} onChange={set("downloads")} /> Allow downloads</label>
+      <label className="check"><input type="checkbox" checked={f.hold} onChange={set("hold")} /> Hold downloads until paid (watermarked previews)</label>
+      <label className="check"><input type="checkbox" checked={f.picks} onChange={set("picks")} /> Let clients heart favorites and send picks</label>
       <label className="check"><input type="checkbox" checked={f.hidden} onChange={set("hidden")} /> Draft (hide from client)</label>
-      <p className="hint">Renaming changes the link. Changing the password signs out anyone using the old one.</p>
+      <p className="hint">Renaming changes the link. Changing the password signs out anyone using the old one. After the closing date, clients see a “gallery closed” page.</p>
       <button className="btn primary" disabled={busy} style={{ width: "100%", justifyContent: "center" }}>{busy ? "Saving…" : "Save changes"}</button>
     </form>
   );
@@ -381,6 +488,94 @@ function Danger({ g, demo, say, onDeleted }: { g: G; demo: boolean; say: (t: str
         </>
       ) : (
         <button className="btn danger" onClick={() => setOpen(true)}>Delete…</button>
+      )}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ sections
+
+function SectionBar({ sections, target, onTarget, onAdd, demo }: {
+  sections: Section[]; target: string; onTarget: (id: string) => void; onAdd: (name: string) => Promise<boolean>; demo: boolean;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return setAdding(false);
+    if (await onAdd(name.trim())) { setName(""); setAdding(false); }
+  }
+  return (
+    <div className="sec-bar">
+      <span className="sec-bar-label">Upload to</span>
+      <button className={`chip ${target === "" ? "on" : ""}`} onClick={() => onTarget("")}>Main</button>
+      {sections.map((s) => (
+        <button key={s.id} className={`chip ${target === s.id ? "on" : ""}`} onClick={() => onTarget(s.id)}>{s.name}</button>
+      ))}
+      {adding ? (
+        <form onSubmit={submit} className="sec-add">
+          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Social cuts" onKeyDown={(e) => e.key === "Escape" && setAdding(false)} />
+          <button className="btn primary" style={{ height: 32 }}>Add</button>
+        </form>
+      ) : (
+        <button className="chip add" disabled={demo} onClick={() => setAdding(true)}>+ Section</button>
+      )}
+    </div>
+  );
+}
+
+function SectionHead({ name, count, editable, onRename, onDelete }: {
+  name: string; count: number; editable: boolean; onRename: (name: string) => Promise<boolean>; onDelete: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(name);
+  const [confirm, setConfirm] = useState(false);
+  return (
+    <header className="mgr-sec-head">
+      {editing ? (
+        <form onSubmit={async (e) => { e.preventDefault(); if (await onRename(draft.trim())) setEditing(false); }} className="sec-add">
+          <input autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setEditing(false)} />
+          <button className="btn primary" style={{ height: 32 }}>Save</button>
+        </form>
+      ) : (
+        <h2 className="serif">{name}</h2>
+      )}
+      <span className="count">{plural(count, "item")}</span>
+      {editable && !editing && (
+        <span className="mthumb-actions" style={{ marginLeft: "auto" }}>
+          <button className="link-btn" onClick={() => { setDraft(name); setEditing(true); }}>Rename</button>
+          {confirm ? (
+            <>
+              <button className="link-btn danger" onClick={onDelete}>Delete section and its files?</button>
+              <button className="link-btn" onClick={() => setConfirm(false)}>Keep</button>
+            </>
+          ) : (
+            <button className="link-btn" onClick={() => setConfirm(true)}>Delete</button>
+          )}
+        </span>
+      )}
+    </header>
+  );
+}
+
+// ------------------------------------------------------------------ activity
+
+function Activity({ items }: { items: ActivityItem[] }) {
+  return (
+    <div className="panel">
+      <h3>Recent activity</h3>
+      {items.length ? (
+        <ul className="activity">
+          {items.map((a, i) => (
+            <li key={i}>
+              <b>{a.event}</b>
+              {a.detail && <span className="a-detail">{a.detail}</span>}
+              <span className="a-meta">{a.time}{a.visitor ? ` · ${a.visitor}` : ""}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="hint" style={{ margin: 0 }}>Nothing yet. You&apos;ll see when the client opens the gallery, unlocks it and downloads files. Your own visits aren&apos;t counted.</p>
       )}
     </div>
   );

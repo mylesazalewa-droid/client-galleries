@@ -1,20 +1,22 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import Closed from "@/components/Closed";
 import GalleryView from "@/components/GalleryView";
 import LockScreen from "@/components/LockScreen";
 import { canView } from "@/lib/access";
-import { studio } from "@/lib/config";
-import { getRecord, loadAll, toGallery } from "@/lib/galleries";
+import { getStudio } from "@/lib/brand";
+import { formatDate } from "@/lib/format";
+import { getRecord, isExpired, loadAll, toGallery } from "@/lib/galleries";
 import { currentOwner } from "@/lib/owner";
 
 export const dynamic = "force-dynamic";
 
-type Props = { params: Promise<{ slug: string }> };
+type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ as?: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const g = await getRecord((await params).slug);
   if (!g) return {};
-  const open = !g.settings.password;
+  const open = !g.settings.password && !g.settings.hold;
   const cover = open ? toGallery(g).cover?.full : undefined;
   return {
     title: g.title,
@@ -23,14 +25,38 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function GalleryPage({ params }: Props) {
+export default async function GalleryPage({ params, searchParams }: Props) {
   const { slug } = await params;
-  // The owner can preview drafts; everyone else only sees published galleries.
-  const g = (await getRecord(slug)) ?? ((await currentOwner()) ? (await loadAll()).find((r) => r.slug === slug) ?? null : null);
-  if (!g) notFound();
+  const { as } = await searchParams;
+  const signedIn = !!(await currentOwner());
+  // "?as=client" lets the owner see exactly what a client sees.
+  const owner = signedIn && as !== "client";
 
-  if (!(await canView(g))) {
-    return <LockScreen slug={g.slug} title={g.title} client={g.settings.client} studio={studio} />;
+  const g = (await getRecord(slug)) ?? (signedIn ? (await loadAll()).find((r) => r.slug === slug) ?? null : null);
+  if (!g) notFound();
+  const studio = await getStudio();
+
+  if (!owner) {
+    if (isExpired(g.settings)) return <Closed studio={studio} title={g.title} />;
+    const locked = !(await canView(g, { ignoreOwner: true }));
+    if (locked) return <LockScreen slug={g.slug} title={g.title} client={g.settings.client} studio={studio} preview={signedIn} />;
   }
-  return <GalleryView gallery={toGallery(g)} studio={studio} />;
+
+  const notes = owner
+    ? [
+        g.hidden && "This is a draft, so clients can't open it.",
+        g.settings.password && `Clients need the password “${g.settings.password}”.`,
+        isExpired(g.settings) && "This gallery has expired, so clients see a closed page.",
+        !isExpired(g.settings) && g.settings.expires && `Closes after ${formatDate(g.settings.expires)}.`,
+        g.settings.hold && "Downloads are on hold until paid, so clients see watermarked previews.",
+      ].filter((x): x is string => !!x)
+    : [];
+
+  return (
+    <GalleryView
+      gallery={toGallery(g, owner)}
+      studio={studio}
+      owner={owner ? { clientView: `/g/${g.slug}?as=client`, notes } : undefined}
+    />
+  );
 }

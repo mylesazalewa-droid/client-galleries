@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { Studio } from "@/lib/types";
 import { Lock } from "./icons";
 
-export default function LockScreen({ slug, title, client, studio }: { slug: string; title: string; client?: string; studio: Studio }) {
+export default function LockScreen({ slug, title, client, studio, preview }: { slug: string; title: string; client?: string; studio: Studio; preview?: boolean }) {
   const router = useRouter();
   const [pw, setPw] = useState("");
   const [err, setErr] = useState("");
@@ -43,6 +43,11 @@ export default function LockScreen({ slug, title, client, studio }: { slug: stri
           <button className="btn primary" disabled={busy}>{busy ? "Opening…" : "Open"}</button>
         </form>
         {err && <p className="error" role="alert" style={{ marginTop: 12 }}>{err}</p>}
+        {preview && (
+          <p className="hint" style={{ marginTop: 18 }}>
+            You&apos;re previewing the client view. <a href={`/g/${slug}`}>Back to owner view</a>
+          </p>
+        )}
         <p className="foot">{studio.name}</p>
       </div>
     </main>

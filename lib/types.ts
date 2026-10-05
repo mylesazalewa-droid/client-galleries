@@ -15,7 +15,11 @@ export type MediaItem = {
   /** playable source, videos only */
   src?: string;
   download: string;
+  /** Drive folder ID of the section this file lives in ("" = main area of the gallery) */
+  section: string;
 };
+
+export type Section = { id: string; name: string };
 
 export type GallerySettings = {
   client?: string;
@@ -28,6 +32,12 @@ export type GallerySettings = {
   message?: string;
   /** draft: only visible in the dashboard */
   hidden?: boolean;
+  /** YYYY-MM-DD; the gallery closes after this day */
+  expires?: string;
+  /** previews only (watermarked, no downloads) until paid */
+  hold?: boolean;
+  /** let clients heart favorites and send picks */
+  picks?: boolean;
 };
 
 export type GallerySummary = {
@@ -43,14 +53,24 @@ export type GallerySummary = {
 export type Gallery = GallerySummary & {
   message?: string;
   allowDownload: boolean;
+  hold: boolean;
+  picks: boolean;
+  expires?: string;
   cover?: MediaItem;
   items: MediaItem[];
+  sections: Section[];
   zip: string;
 };
 
 export type Studio = {
   name: string;
   tagline: string;
+  headline?: string;
   url?: string;
   email?: string;
+  accent?: string;
+  /** URL of the uploaded logo, if any */
+  logo?: string;
+  /** URL + kind of the landing page background, if any */
+  landing?: { src: string; poster?: string; kind: MediaKind };
 };

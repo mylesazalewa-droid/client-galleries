@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { MediaItem } from "@/lib/types";
 import { plural } from "@/lib/format";
 import { Close, Download, Heart, Left, Note, Right } from "./icons";
+import { Watermark } from "./Brand";
 
 type Fav = { note: string };
 
@@ -15,6 +16,10 @@ type Props = {
   onToggleFav: (id: string) => void;
   onNote: (id: string, note: string) => void;
   allowDownload: boolean;
+  /** favorites and notes */
+  picks: boolean;
+  /** studio name to overlay while a payment hold is on */
+  watermark?: string;
 };
 
 type Pt = { x: number; y: number };
@@ -23,7 +28,7 @@ const mid = (a: Pt, b: Pt) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const MAX_ZOOM = 4;
 
-export default function Lightbox({ items, index, onIndex, onClose, favs, onToggleFav, onNote, allowDownload }: Props) {
+export default function Lightbox({ items, index, onIndex, onClose, favs, onToggleFav, onNote, allowDownload, picks, watermark }: Props) {
   const item = items[index];
   const [dir, setDir] = useState<"next" | "prev" | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
@@ -118,7 +123,7 @@ export default function Lightbox({ items, index, onIndex, onClose, favs, onToggl
       if (e.key === "ArrowRight") go(1);
       else if (e.key === "ArrowLeft") go(-1);
       else if (e.key === "Escape") onClose();
-      else if (e.key.toLowerCase() === "f") onToggleFav(item.id);
+      else if (picks && e.key.toLowerCase() === "f") onToggleFav(item.id);
     };
     window.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
@@ -243,17 +248,21 @@ export default function Lightbox({ items, index, onIndex, onClose, favs, onToggl
           <b>{item.name}</b>
           <small>{index + 1} of {plural(items.length, "item")}</small>
         </div>
-        <button className={`icon-btn ${fav ? "on" : ""}`} onClick={() => onToggleFav(item.id)} aria-pressed={!!fav} aria-label={fav ? "Remove from favorites" : "Add to favorites"} title="Favorite (F)">
-          <Heart filled={!!fav} />
-        </button>
-        <button
-          className="icon-btn"
-          onClick={() => setNoteOpen((o) => !o)}
-          aria-label="Add a note" title="Note"
-          style={hasNote ? { color: "var(--accent)" } : undefined}
-        >
-          <Note />
-        </button>
+        {picks && (
+          <>
+            <button className={`icon-btn ${fav ? "on" : ""}`} onClick={() => onToggleFav(item.id)} aria-pressed={!!fav} aria-label={fav ? "Remove from favorites" : "Add to favorites"} title="Favorite (F)">
+              <Heart filled={!!fav} />
+            </button>
+            <button
+              className="icon-btn"
+              onClick={() => setNoteOpen((o) => !o)}
+              aria-label="Add a note" title="Note"
+              style={hasNote ? { color: "var(--accent)" } : undefined}
+            >
+              <Note />
+            </button>
+          </>
+        )}
         {allowDownload && (
           <a className="icon-btn" href={item.download} download={item.name} aria-label="Download" title="Download">
             <Download />
@@ -274,7 +283,7 @@ export default function Lightbox({ items, index, onIndex, onClose, favs, onToggl
           <div ref={mediaRef} className="lb-photo" style={{ transformOrigin: "center center" }}>
             {item.kind === "photo" ? (
               <>
-                <img src={item.thumb} alt="" draggable={false} />
+                <img src={item.thumb} alt="" draggable={false} onContextMenu={watermark ? (e) => e.preventDefault() : undefined} />
                 <img
                   className={`hi ${hiLoaded ? "loaded" : ""}`}
                   src={item.full}
@@ -293,9 +302,12 @@ export default function Lightbox({ items, index, onIndex, onClose, favs, onToggl
                 playsInline
                 preload="metadata"
                 controlsList={allowDownload ? undefined : "nodownload"}
+                disablePictureInPicture={!!watermark}
+                onContextMenu={watermark ? (e) => e.preventDefault() : undefined}
                 style={{ position: "absolute", inset: 0 }}
               />
             )}
+            {watermark && <Watermark text={watermark} count={48} />}
           </div>
         </div>
         <button className="lb-arrow prev" onClick={() => go(-1)} disabled={index === 0} aria-label="Previous"><Left /></button>

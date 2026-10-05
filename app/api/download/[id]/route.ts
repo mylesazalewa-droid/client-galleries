@@ -1,4 +1,5 @@
-import { canView } from "@/lib/access";
+import { canView, viewerState } from "@/lib/access";
+import { logEvent } from "@/lib/activity";
 import { isDemo } from "@/lib/config";
 import { findItem } from "@/lib/galleries";
 import { driveMedia } from "@/lib/google";
@@ -13,11 +14,14 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   const found = await findItem(url.searchParams.get("g") ?? "", id);
   if (!found) return new Response("Not found", { status: 404 });
   if (!(await canView(found.gallery))) return new Response("Locked", { status: 401 });
-  if (found.gallery.settings.downloads === false) return new Response("Downloads are off", { status: 403 });
+  const v = await viewerState(found.gallery);
+  if (v.expired) return new Response("This gallery has closed", { status: 410 });
+  if (!v.canDownload) return new Response("Downloads aren't available for this gallery yet", { status: 403 });
   if (isDemo) return Response.redirect(new URL(found.item.download, req.url));
 
   const upstream = await driveMedia(id, { signal: req.signal });
   if (!upstream.ok) return new Response("Download failed", { status: upstream.status });
+  await logEvent(req, { galleryId: found.gallery.id, title: found.gallery.title, event: "Downloaded", detail: found.item.name });
   const headers = new Headers({
     "Content-Type": upstream.headers.get("content-type") ?? "application/octet-stream",
     "Content-Disposition": disposition(found.item.name),

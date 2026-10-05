@@ -1,57 +1,57 @@
+import type { Metadata } from "next";
 import Link from "next/link";
-import ThemeToggle from "@/components/ThemeToggle";
-import { Lock } from "@/components/icons";
-import { isDemo, showIndex, studio } from "@/lib/config";
-import { formatDate } from "@/lib/format";
-import { loadAll, toSummary } from "@/lib/galleries";
+import CodeEntry from "@/components/CodeEntry";
+import { getStudio } from "@/lib/brand";
+import { isDemo } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: { absolute: "Client galleries" } };
 
 export default async function Home() {
-  const listed = showIndex || isDemo;
-  const galleries = listed ? (await loadAll()).filter((g) => !g.hidden).map(toSummary) : [];
+  const studio = await getStudio();
+  const headline = studio.headline || studio.name;
+  const first = studio.name.split(" ")[0];
 
   return (
-    <main className="home">
-      <header>
-        <Link href="/" className="brand serif">{studio.name}</Link>
-        <ThemeToggle />
+    <main className="land">
+      <header className="land-bar land-top">
+        <Link href="/" className="land-brand serif">
+          {studio.logo ? <img src={studio.logo} alt={studio.name} /> : studio.name}
+        </Link>
+        <nav className="land-links">
+          {studio.url && <a href={studio.url}>Website</a>}
+          {studio.email && <a href={`mailto:${studio.email}`}>Contact</a>}
+        </nav>
       </header>
 
-      <section className="intro">
-        <div className="eyebrow">{studio.tagline}</div>
-        <h1 className="serif">Client <em>galleries</em></h1>
+      <div className="land-frame" aria-hidden>
+        {studio.landing?.kind === "video" ? (
+          <video src={studio.landing.src} poster={studio.landing.poster} autoPlay muted loop playsInline preload="metadata" />
+        ) : studio.landing ? (
+          <img src={studio.landing.src} alt="" />
+        ) : (
+          <span className="land-glow" />
+        )}
+      </div>
+
+      <section className="land-bar land-bottom">
+        <div className="land-title">
+          <h1 className="serif">{headline}</h1>
+          <p>{studio.tagline}</p>
+        </div>
+        <div className="land-entry">
+          <CodeEntry />
+          <p className="land-help">
+            Your code is the last six characters of the gallery link {first} sent you.
+            {isDemo && <> Demo: <a href="/g/lakeshore-credit-union-brand-film">open a sample gallery</a>.</>}
+          </p>
+        </div>
       </section>
 
-      {listed ? (
-        <div className="cards">
-          {galleries.map((g) => (
-            <Link key={g.slug} href={`/g/${g.slug}`} className="card">
-              <div className="img">
-                {g.locked || !g.coverThumb ? <Lock /> : <img src={g.coverThumb} alt="" loading="lazy" />}
-              </div>
-              <h3 className="serif">{g.title}</h3>
-              <div className="eyebrow">{[g.client, formatDate(g.date)].filter(Boolean).join(" · ")}</div>
-            </Link>
-          ))}
-        </div>
-      ) : (
-        <p style={{ color: "var(--muted)", maxWidth: "46ch" }}>
-          Looking for your gallery? Use the private link {studio.name.split(" ")[0]} sent you
-          {studio.email ? <> or email <a href={`mailto:${studio.email}`}>{studio.email}</a></> : null}.
-        </p>
-      )}
-
-      <p className="foot" style={{ marginTop: 80 }}>
+      <footer className="land-foot">
+        <span>© {new Date().getFullYear()} {studio.name}</span>
         <a href="/admin">Owner sign in</a>
-      </p>
-
-      {isDemo && (
-        <div className="notice">
-          <b>Demo mode.</b> These galleries use sample media until Google Drive is connected. The second gallery&apos;s password is <code>demo</code>.{" "}
-          <a href="/admin">Owner dashboard →</a>
-        </div>
-      )}
+      </footer>
     </main>
   );
 }

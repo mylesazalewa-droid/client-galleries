@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { cookieName, passwordMatches, tokenFor } from "@/lib/access";
+import { logEvent } from "@/lib/activity";
 import { getRecord } from "@/lib/galleries";
 
 export const runtime = "nodejs";
@@ -22,5 +23,6 @@ export async function POST(req: Request) {
     path: "/",
     maxAge: 60 * 60 * 24 * 30,
   });
+  await logEvent(req, { galleryId: g.id, title: g.title, event: "Unlocked with password" });
   return Response.json({ ok: true });
 }

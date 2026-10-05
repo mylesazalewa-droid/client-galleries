@@ -1,4 +1,4 @@
-import { friendlyDriveError, renameFolder as renameItem, trash, writeSettings } from "@/lib/drive-admin";
+import { friendlyDriveError, moveFile, renameFolder as renameItem, trash, writeSettings } from "@/lib/drive-admin";
 import { clearCache, getRecordById } from "@/lib/galleries";
 import { adminRoute, ownerToken } from "@/lib/owner";
 
@@ -29,6 +29,23 @@ export const PATCH = adminRoute(async (req: Request, ctx: { params: Promise<{ id
   if (!g || !item) return Response.json({ ok: false, error: "File not found" }, { status: 404 });
 
   const body = await req.json().catch(() => ({}));
+
+  // Move between the main area ("") and sections.
+  if (typeof body.section === "string") {
+    const to = body.section || g.id;
+    if (to !== g.id && !g.sections.some((s) => s.id === to)) return Response.json({ ok: false, error: "Section not found" }, { status: 404 });
+    const from = item.section || g.id;
+    if (from === to) return Response.json({ ok: true });
+    const { token } = await ownerToken();
+    try {
+      await moveFile(token, id, from, to);
+      clearCache();
+      return Response.json({ ok: true });
+    } catch (e) {
+      return Response.json({ ok: false, error: friendlyDriveError(e) }, { status: 400 });
+    }
+  }
+
   let name = String(body.name ?? "").replace(/[\\/]/g, "_").trim().slice(0, 200);
   if (!name) return Response.json({ ok: false, error: "Give it a name." }, { status: 400 });
   const ext = item.name.match(/\.[a-z0-9]{2,5}$/i)?.[0] ?? "";

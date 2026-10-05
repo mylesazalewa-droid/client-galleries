@@ -1,16 +1,25 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Gallery, MediaItem, Studio } from "@/lib/types";
+import type { Gallery, MediaItem, Section, Studio } from "@/lib/types";
 import { formatDate, formatDuration, plural } from "@/lib/format";
+import { Brand, Watermark } from "./Brand";
 import Lightbox from "./Lightbox";
 import ThemeToggle from "./ThemeToggle";
-import { Check, Down, Download, Film, Heart, Note, Photo, Play, Send } from "./icons";
+import { Check, Down, Download, Film, Heart, Lock, Note, Photo, Play, Send } from "./icons";
 
 type Fav = { note: string };
 type Filter = "all" | "photos" | "videos" | "favorites";
 
-export default function GalleryView({ gallery, studio }: { gallery: Gallery; studio: Studio }) {
+type Props = {
+  gallery: Gallery;
+  studio: Studio;
+  /** set when the owner is viewing: shows a banner with a link to the client view */
+  owner?: { clientView: string; notes: string[] };
+};
+
+export default function GalleryView({ gallery, studio, owner }: Props) {
   const favKey = `favs:${gallery.slug}`;
+  const picksOn = gallery.picks;
   const [favs, setFavs] = useState<Record<string, Fav>>({});
   const [filter, setFilter] = useState<Filter>("all");
   const [open, setOpen] = useState<number | null>(null);
@@ -22,13 +31,25 @@ export default function GalleryView({ gallery, studio }: { gallery: Gallery; stu
 
   // favorites persist on this device until sent
   useEffect(() => {
+    if (!picksOn) return;
     try { setFavs(JSON.parse(localStorage.getItem(favKey) || "{}")); } catch {}
     loadedFavs.current = true;
-  }, [favKey]);
+  }, [favKey, picksOn]);
   useEffect(() => {
     if (!loadedFavs.current) return;
     try { localStorage.setItem(favKey, JSON.stringify(favs)); } catch {}
   }, [favs, favKey]);
+
+  // Let the studio know the gallery was opened (once per browser session).
+  useEffect(() => {
+    if (owner) return;
+    const key = `seen:${gallery.slug}`;
+    try {
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, "1");
+    } catch {}
+    fetch("/api/track", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slug: gallery.slug }), keepalive: true }).catch(() => {});
+  }, [gallery.slug, owner]);
 
   useEffect(() => {
     const el = heroRef.current;
@@ -42,14 +63,29 @@ export default function GalleryView({ gallery, studio }: { gallery: Gallery; stu
   const videos = gallery.items.length - photos;
   const favCount = Object.keys(favs).filter((id) => gallery.items.some((i) => i.id === id)).length;
 
+  // Sections: main area first, then each section in order.
+  const order = useMemo(() => ["", ...gallery.sections.map((s) => s.id)], [gallery.sections]);
+  const groupOf = useCallback((i: MediaItem) => (order.includes(i.section) ? i.section : ""), [order]);
+
   const visible = useMemo(() => {
-    switch (filter) {
-      case "photos": return gallery.items.filter((i) => i.kind === "photo");
-      case "videos": return gallery.items.filter((i) => i.kind === "video");
-      case "favorites": return gallery.items.filter((i) => favs[i.id]);
-      default: return gallery.items;
-    }
-  }, [filter, gallery.items, favs]);
+    const list = (() => {
+      switch (filter) {
+        case "photos": return gallery.items.filter((i) => i.kind === "photo");
+        case "videos": return gallery.items.filter((i) => i.kind === "video");
+        case "favorites": return gallery.items.filter((i) => favs[i.id]);
+        default: return gallery.items;
+      }
+    })();
+    return [...list].sort((a, b) => order.indexOf(groupOf(a)) - order.indexOf(groupOf(b)));
+  }, [filter, gallery.items, favs, order, groupOf]);
+
+  const groups = useMemo(() => {
+    const named = new Map<string, Section>(gallery.sections.map((s) => [s.id, s]));
+    return order
+      .map((id) => ({ id, name: named.get(id)?.name ?? "", items: visible.filter((i) => groupOf(i) === id) }))
+      .filter((g) => g.items.length);
+  }, [order, visible, gallery.sections, groupOf]);
+  const sectioned = gallery.sections.length > 0;
 
   // the lightbox keeps the list it was opened with, so un-hearting in Favorites doesn't jump
   const [lbItems, setLbItems] = useState<MediaItem[]>([]);
@@ -67,9 +103,9 @@ export default function GalleryView({ gallery, studio }: { gallery: Gallery; stu
   }, []);
 
   // Back button / swipe-back closes the lightbox instead of leaving the page.
-  const openAt = (i: number) => {
+  const openItem = (item: MediaItem) => {
     setLbItems(visible);
-    setOpen(i);
+    setOpen(visible.indexOf(item));
     if (!history.state?.lb) history.pushState({ ...history.state, lb: true }, "");
   };
   const close = useCallback(() => {
@@ -87,21 +123,27 @@ export default function GalleryView({ gallery, studio }: { gallery: Gallery; stu
     setFilter(f);
     if (window.scrollY > (heroRef.current?.offsetHeight ?? 0)) scrollToGrid();
   };
+  const jump = (id: string) => document.getElementById(`sec-${id || "main"}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   const meta = [gallery.client, formatDate(gallery.date)].filter(Boolean).join("  ·  ");
   const countLine = [photos && plural(photos, "photo"), videos && plural(videos, "film")].filter(Boolean).join(" · ");
   const cover = gallery.cover;
+  const showTabs = (photos > 0 && videos > 0) || picksOn;
+  let tileIndex = 0;
 
   return (
     <>
+      {owner && (
+        <div className="owner-bar">
+          <span><b>Owner view.</b> {owner.notes.length ? owner.notes.join(" ") : "You see everything here."}</span>
+          <a className="btn" href={owner.clientView}>See what clients see</a>
+          <a className="btn" href="/admin">Dashboard</a>
+        </div>
+      )}
       <section className="hero" ref={heroRef}>
         {cover && <img className="hero-img" src={cover.full} alt="" fetchPriority="high" />}
         <div className="hero-top">
-          {studio.url ? (
-            <a href={studio.url} className="brand serif">{studio.name}</a>
-          ) : (
-            <span className="brand serif">{studio.name}</span>
-          )}
+          <Brand studio={studio} />
           <ThemeToggle className="icon-btn" />
         </div>
         <div className="hero-body">
@@ -118,7 +160,7 @@ export default function GalleryView({ gallery, studio }: { gallery: Gallery; stu
       <div ref={gridTop} />
       <nav className="toolbar" aria-label="Gallery">
         <div className="title serif" style={{ opacity: pastHero ? 1 : 0, transition: "opacity .3s" }}>{gallery.title}</div>
-        <div className="tabs" role="tablist">
+        <div className="tabs" role="tablist" style={showTabs ? undefined : { visibility: "hidden" }}>
           <Tab on={filter === "all"} onClick={() => pick("all")} n={gallery.items.length}>All</Tab>
           {photos > 0 && videos > 0 && (
             <>
@@ -126,9 +168,11 @@ export default function GalleryView({ gallery, studio }: { gallery: Gallery; stu
               <Tab on={filter === "videos"} onClick={() => pick("videos")} n={videos} icon={<Film />}><span className="label-long">Films</span></Tab>
             </>
           )}
-          <Tab on={filter === "favorites"} onClick={() => pick("favorites")} n={favCount} icon={<Heart filled={filter === "favorites"} />}>
-            <span className="label-long">Favorites</span>
-          </Tab>
+          {picksOn && (
+            <Tab on={filter === "favorites"} onClick={() => pick("favorites")} n={favCount} icon={<Heart filled={filter === "favorites"} />}>
+              <span className="label-long">Favorites</span>
+            </Tab>
+          )}
         </div>
         <div className="right">
           {gallery.allowDownload && (
@@ -144,31 +188,68 @@ export default function GalleryView({ gallery, studio }: { gallery: Gallery; stu
                     <a href={`${gallery.zip}?only=videos`} download>Films only <span>{videos}</span></a>
                   </>
                 )}
+                {gallery.sections.map((sec) => {
+                  const n = gallery.items.filter((i) => i.section === sec.id).length;
+                  return n ? <a key={sec.id} href={`${gallery.zip}?section=${encodeURIComponent(sec.id)}`} download>{sec.name} <span>{n}</span></a> : null;
+                })}
               </div>
             </details>
           )}
         </div>
       </nav>
 
+      {gallery.hold && (
+        <div className="hold-bar">
+          <Lock /> <span><b>Preview only.</b> Full-resolution downloads unlock once the project is paid.</span>
+        </div>
+      )}
+
       <main className="wrap">
-        {visible.length ? (
-          <div className="grid" key={filter}>
-            {visible.map((item, i) => (
-              <Tile
-                key={item.id}
-                item={item}
-                delay={Math.min(i, 14) * 35}
-                fav={favs[item.id]}
-                onOpen={() => openAt(i)}
-                onFav={() => toggleFav(item.id)}
-                canDownload={gallery.allowDownload}
-              />
+        {sectioned && groups.length > 1 && (
+          <div className="sec-nav">
+            {groups.map((g) => (
+              <button key={g.id || "main"} className="chip" onClick={() => jump(g.id)}>
+                {g.name || "Main"} <span>{g.items.length}</span>
+              </button>
             ))}
           </div>
+        )}
+        {visible.length ? (
+          groups.map((group) => (
+            <section key={`${filter}-${group.id}`} id={`sec-${group.id || "main"}`} className="sec">
+              {sectioned && group.id && (
+                <header className="sec-head">
+                  <h2 className="serif">{group.name || "Main"}</h2>
+                  <span>{plural(group.items.length, "item")}</span>
+                  {gallery.allowDownload && group.id && (
+                    <a className="link-dl" href={`${gallery.zip}?section=${encodeURIComponent(group.id)}`} download><Download /> Download section</a>
+                  )}
+                </header>
+              )}
+              <div className="grid">
+                {group.items.map((item) => (
+                  <Tile
+                    key={item.id}
+                    item={item}
+                    delay={Math.min(tileIndex++, 14) * 35}
+                    fav={favs[item.id]}
+                    picks={picksOn}
+                    watermark={gallery.hold ? studio.name : undefined}
+                    onOpen={() => openItem(item)}
+                    onFav={() => toggleFav(item.id)}
+                    canDownload={gallery.allowDownload}
+                  />
+                ))}
+              </div>
+            </section>
+          ))
         ) : (
           <div className="empty">
-            <div className="serif">No favorites yet</div>
-            Tap the heart on anything you&apos;d like to keep or use.
+            {filter === "favorites" ? (
+              <><div className="serif">No favorites yet</div>Tap the heart on anything you&apos;d like to keep or use.</>
+            ) : (
+              <><div className="serif">Nothing here yet</div>Check back soon.</>
+            )}
           </div>
         )}
         <p className="foot">
@@ -177,7 +258,7 @@ export default function GalleryView({ gallery, studio }: { gallery: Gallery; stu
         </p>
       </main>
 
-      {favCount > 0 && open === null && (
+      {picksOn && favCount > 0 && open === null && (
         <div className="selbar">
           <span className="count"><Heart filled /> {favCount} selected</span>
           {filter !== "favorites" && <button className="btn" onClick={() => pick("favorites")}>Review</button>}
@@ -195,6 +276,8 @@ export default function GalleryView({ gallery, studio }: { gallery: Gallery; stu
           onToggleFav={toggleFav}
           onNote={setNote}
           allowDownload={gallery.allowDownload}
+          picks={picksOn}
+          watermark={gallery.hold ? studio.name : undefined}
         />
       )}
 
@@ -218,7 +301,12 @@ function Tab({ on, onClick, n, icon, children }: { on: boolean; onClick: () => v
   );
 }
 
-function Tile({ item, delay, fav, onOpen, onFav, canDownload }: { item: MediaItem; delay: number; fav?: Fav; onOpen: () => void; onFav: () => void; canDownload: boolean }) {
+type TileProps = {
+  item: MediaItem; delay: number; fav?: Fav; picks: boolean; watermark?: string;
+  onOpen: () => void; onFav: () => void; canDownload: boolean;
+};
+
+function Tile({ item, delay, fav, picks, watermark, onOpen, onFav, canDownload }: TileProps) {
   const [loaded, setLoaded] = useState(false);
   const r = item.width / item.height;
   return (
@@ -227,6 +315,7 @@ function Tile({ item, delay, fav, onOpen, onFav, canDownload }: { item: MediaIte
       style={{ "--r": r.toFixed(4), "--d": `${delay}ms` } as React.CSSProperties}
       onClick={onOpen}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }}
+      onContextMenu={watermark ? (e) => e.preventDefault() : undefined}
       role="button"
       tabIndex={0}
       aria-label={`${item.kind === "video" ? "Play" : "Open"} ${item.name}`}
@@ -237,10 +326,12 @@ function Tile({ item, delay, fav, onOpen, onFav, canDownload }: { item: MediaIte
         alt=""
         loading="lazy"
         decoding="async"
+        draggable={false}
         className={loaded ? "loaded" : ""}
         onLoad={() => setLoaded(true)}
         ref={(el) => { if (el?.complete && el.naturalWidth && !loaded) setLoaded(true); }}
       />
+      {watermark && <Watermark text={watermark} />}
       <span className="shade" />
       {item.kind === "video" && (
         <>
@@ -248,18 +339,20 @@ function Tile({ item, delay, fav, onOpen, onFav, canDownload }: { item: MediaIte
           {item.duration ? <span className="dur">{formatDuration(item.duration)}</span> : null}
         </>
       )}
-      {fav?.note ? <span className="note-dot" title={fav.note}><Note /></span> : null}
-      <button
-        className={`fav ${fav ? "on" : ""}`}
-        onClick={(e) => { e.stopPropagation(); onFav(); }}
-        aria-pressed={!!fav}
-        aria-label={fav ? "Remove from favorites" : "Add to favorites"}
-      >
-        <Heart filled={!!fav} />
-      </button>
+      {picks && fav?.note ? <span className="note-dot" title={fav.note}><Note /></span> : null}
+      {picks && (
+        <button
+          className={`fav ${fav ? "on" : ""}`}
+          onClick={(e) => { e.stopPropagation(); onFav(); }}
+          aria-pressed={!!fav}
+          aria-label={fav ? "Remove from favorites" : "Add to favorites"}
+        >
+          <Heart filled={!!fav} />
+        </button>
+      )}
       {canDownload && (
         <a
-          className="dl"
+          className={`dl ${picks ? "" : "top"}`}
           href={item.download}
           download={item.name}
           onClick={(e) => e.stopPropagation()}

@@ -20,7 +20,7 @@ export const showIndex = process.env.SHOW_INDEX === "true";
 export const cookieSecret = process.env.GALLERY_SECRET || "change-me-in-production";
 
 /** How long gallery listings are cached in memory, in ms. New uploads appear after this. */
-export const cacheTtl = Number(process.env.CACHE_SECONDS || 60) * 1000;
+export const cacheTtl = Number(process.env.CACHE_SECONDS || 15) * 1000;
 
 // ---- Owner sign-in (Google OAuth) ----
 export const oauthClientId = process.env.GOOGLE_OAUTH_CLIENT_ID || "";

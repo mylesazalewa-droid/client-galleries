@@ -1,4 +1,5 @@
 import { canView } from "@/lib/access";
+import { logEvent } from "@/lib/activity";
 import { isDemo, studio } from "@/lib/config";
 import { getRecord } from "@/lib/galleries";
 import { sheets } from "@/lib/google";
@@ -14,6 +15,7 @@ export async function POST(req: Request) {
   const g = body?.slug ? await getRecord(String(body.slug)) : null;
   if (!g) return Response.json({ ok: false, error: "Gallery not found" }, { status: 404 });
   if (!(await canView(g))) return Response.json({ ok: false, error: "Locked" }, { status: 401 });
+  if (!g.settings.picks) return Response.json({ ok: false, error: "Picks are turned off for this gallery." }, { status: 403 });
 
   const name = clip(body.name, 120);
   const email = clip(body.email, 200);
@@ -35,6 +37,15 @@ export async function POST(req: Request) {
     return Response.json({ ok: true, demo: true, count: chosen.length });
   }
 
+  // Always goes to the activity sheet; SELECTIONS_SHEET_ID (optional) gets the detailed rows.
+  const summary = chosen.map(({ item, note }) => `${item.name}${note ? ` — "${note}"` : ""}`).join("; ");
+  await logEvent(req, {
+    galleryId: g.id,
+    title: g.title,
+    event: "Sent picks",
+    detail: `${name}${email ? ` <${email}>` : ""}: ${chosen.length} picked${message ? ` — "${message}"` : ""}${summary ? ` · ${summary}` : ""}`.slice(0, 45000),
+  }, { includeOwner: true });
+
   const now = new Date().toISOString();
   const link = (id: string) => `https://drive.google.com/file/d/${id}/view`;
   const rows = chosen.length
@@ -50,8 +61,6 @@ export async function POST(req: Request) {
       insertDataOption: "INSERT_ROWS",
       requestBody: { values: rows },
     });
-  } else {
-    console.warn("SELECTIONS_SHEET_ID not set; selections were not saved", rows);
   }
 
   // Optional email ping via Resend (resend.com). Skipped when not configured.

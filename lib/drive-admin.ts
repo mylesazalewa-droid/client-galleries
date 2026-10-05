@@ -1,6 +1,9 @@
 import "server-only";
+import { ACTIVITY_NAME, findActivitySheet, HEADERS, rememberActivitySheet, SHEET_MIME } from "./activity";
+import { BRAND_FILE } from "./brand";
 import { rootFolderName } from "./config";
-import { clearCache, resolveRoot, SETTINGS_FILE } from "./galleries";
+import { BRAND_FOLDER, clearCache, resolveRoot, SETTINGS_FILE } from "./galleries";
+import { sheets } from "./google";
 import type { GallerySettings } from "./types";
 
 /**
@@ -36,9 +39,15 @@ function serviceAccountEmail() {
   return JSON.parse(json).client_email as string;
 }
 
+/** Searches as the owner: with drive.file this sees exactly the files and folders this app created, with no indexing delay. */
+async function ownerFind(token: string, q: string) {
+  const res = await call<{ files?: { id: string }[] }>(token, `${API}/files?q=${encodeURIComponent(q)}&fields=files(id)&pageSize=5`);
+  return res.files?.[0]?.id ?? null;
+}
+
 /** Finds the CLIENTS folder, or creates it in the owner's Drive and shares it (read-only) with the service account. */
 export async function ensureRoot(token: string) {
-  const existing = await resolveRoot(true);
+  const existing = (await resolveRoot(true)) ?? (await ownerFind(token, `name='${rootFolderName.replace(/'/g, "\\'")}' and mimeType='${FOLDER}' and trashed=false`));
   if (existing) return existing;
   const folder = await call<{ id: string }>(token, `${API}/files?fields=id`, {
     method: "POST",
@@ -69,6 +78,9 @@ function cleanSettings(s: GallerySettings): GallerySettings {
   if (s.cover?.trim()) out.cover = s.cover.trim();
   if (s.downloads === false) out.downloads = false;
   if (s.hidden) out.hidden = true;
+  if (s.expires?.trim()) out.expires = s.expires.trim();
+  if (s.hold) out.hold = true;
+  if (s.picks) out.picks = true;
   return out;
 }
 
@@ -140,4 +152,90 @@ export function friendlyDriveError(e: unknown) {
     return "This was added directly in Google Drive, so it has to be changed there.";
   }
   return e instanceof Error ? e.message : "Something went wrong";
+}
+
+// ---------------------------------------------------------------- sections
+
+export async function createFolder(token: string, parent: string, name: string) {
+  const folder = await call<{ id: string }>(token, `${API}/files?fields=id`, {
+    method: "POST",
+    body: JSON.stringify({ name: name.trim(), mimeType: FOLDER, parents: [parent] }),
+  });
+  return folder.id;
+}
+
+/** Moves a file between the gallery's main area and its sections. */
+export async function moveFile(token: string, id: string, from: string, to: string) {
+  await call(token, `${API}/files/${id}?addParents=${encodeURIComponent(to)}&removeParents=${encodeURIComponent(from)}`, {
+    method: "PATCH",
+    body: JSON.stringify({}),
+  });
+}
+
+// ---------------------------------------------------------------- branding
+
+export async function ensureBrandFolder(token: string, existing?: string) {
+  if (existing) return existing;
+  const root = await ensureRoot(token);
+  const found = await ownerFind(token, `name='${BRAND_FOLDER}' and mimeType='${FOLDER}' and '${root}' in parents and trashed=false`);
+  return found ?? createFolder(token, root, BRAND_FOLDER);
+}
+
+export async function writeBrand(token: string, fileId: string | undefined, brand: object) {
+  const content = JSON.stringify(brand, null, 2);
+  if (!fileId) {
+    const root = await ensureRoot(token);
+    fileId = (await ownerFind(token, `name='${BRAND_FILE}' and '${root}' in parents and trashed=false`)) ?? undefined;
+  }
+  if (fileId) {
+    try {
+      const { body, headers } = multipart({}, content);
+      await call(token, `${UPLOAD}/files/${fileId}?uploadType=multipart`, { method: "PATCH", body, headers });
+      return fileId;
+    } catch (e) {
+      if (!(e instanceof DriveError) || (e.status !== 403 && e.status !== 404)) throw e;
+    }
+  }
+  const root = await ensureRoot(token);
+  const { body, headers } = multipart({ name: BRAND_FILE, parents: [root], mimeType: "application/json" }, content);
+  const created = await call<{ id: string }>(token, `${UPLOAD}/files?uploadType=multipart&fields=id`, { method: "POST", body, headers });
+  return created.id;
+}
+
+// ---------------------------------------------------------------- activity sheet
+
+/** Creates the activity spreadsheet in CLIENTS (owned by you) and lets the service account add rows to it. */
+export async function ensureActivitySheet(token: string) {
+  const root = await ensureRoot(token);
+  const existing =
+    (await findActivitySheet(true)) ??
+    (await ownerFind(token, `name='${ACTIVITY_NAME.replace(/'/g, "\\'")}' and mimeType='${SHEET_MIME}' and '${root}' in parents and trashed=false`));
+  if (existing) {
+    rememberActivitySheet(existing);
+    return existing;
+  }
+  const sheet = await call<{ id: string }>(token, `${API}/files?fields=id`, {
+    method: "POST",
+    body: JSON.stringify({ name: ACTIVITY_NAME, mimeType: SHEET_MIME, parents: [root] }),
+  });
+  await call(token, `${API}/files/${sheet.id}/permissions?sendNotificationEmail=false`, {
+    method: "POST",
+    body: JSON.stringify({ role: "writer", type: "user", emailAddress: serviceAccountEmail() }),
+  });
+  // Header row, written by the service account now that it can edit.
+  for (let i = 0; i < 3; i++) {
+    try {
+      await sheets().spreadsheets.values.update({
+        spreadsheetId: sheet.id,
+        range: "A1:G1",
+        valueInputOption: "RAW",
+        requestBody: { values: [HEADERS] },
+      });
+      break;
+    } catch {
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
+  rememberActivitySheet(sheet.id);
+  return sheet.id;
 }

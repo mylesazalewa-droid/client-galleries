@@ -1,4 +1,4 @@
-import { createGallery } from "@/lib/drive-admin";
+import { createGallery, ensureActivitySheet } from "@/lib/drive-admin";
 import { getRecordById, slugFor } from "@/lib/galleries";
 import { adminRoute, ownerToken } from "@/lib/owner";
 
@@ -18,7 +18,10 @@ export const POST = adminRoute(async (req: Request) => {
     password: body.password,
     downloads: body.downloads !== false,
     hidden: !!body.hidden,
+    expires: body.expires,
+    picks: !!body.picks,
   });
+  await ensureActivitySheet(token).catch((e) => console.warn("activity sheet setup failed", e));
   await getRecordById(id, true);
   return Response.json({ ok: true, id, slug: slugFor(title, id) });
 });
