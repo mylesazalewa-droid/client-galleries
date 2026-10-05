@@ -8,31 +8,39 @@ import { getStudio } from "@/lib/brand";
 import { formatDate } from "@/lib/format";
 import { getRecord, isExpired, loadAll, toGallery } from "@/lib/galleries";
 import { currentOwner } from "@/lib/owner";
+import { forgetPayments } from "@/lib/payments";
 
 export const dynamic = "force-dynamic";
 
-type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ as?: string }> };
+type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ as?: string; paid?: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const g = await getRecord((await params).slug);
+  const { slug } = await params;
+  const g = await getRecord(slug);
   if (!g) return {};
-  const open = !g.settings.password && !g.settings.hold;
-  const cover = open ? toGallery(g).cover?.full : undefined;
+  const description = g.settings.client ? `Prepared for ${g.settings.client}` : undefined;
+  const image = `/api/og?g=${slug}`;
   return {
     title: g.title,
-    description: g.settings.client ? `For ${g.settings.client}` : undefined,
-    openGraph: { title: g.title, images: cover ? [cover] : undefined },
+    description,
+    openGraph: { title: g.title, description, images: [{ url: image, width: 1200, height: 630 }] },
+    twitter: { card: "summary_large_image", title: g.title, description, images: [image] },
   };
 }
 
 export default async function GalleryPage({ params, searchParams }: Props) {
   const { slug } = await params;
-  const { as } = await searchParams;
+  const { as, paid } = await searchParams;
   const signedIn = !!(await currentOwner());
   // "?as=client" lets the owner see exactly what a client sees.
   const owner = signedIn && as !== "client";
 
-  const g = (await getRecord(slug)) ?? (signedIn ? (await loadAll()).find((r) => r.slug === slug) ?? null : null);
+  let g = (await getRecord(slug)) ?? (signedIn ? (await loadAll()).find((r) => r.slug === slug) ?? null : null);
+  // Just back from Stripe: re-check payments so the gallery opens unlocked.
+  if (g && paid === "1" && g.settings.hold) {
+    forgetPayments();
+    g = (await loadAll(true)).find((r) => r.slug === slug) ?? g;
+  }
   if (!g) notFound();
   const studio = await getStudio();
 
@@ -55,6 +63,7 @@ export default async function GalleryPage({ params, searchParams }: Props) {
   return (
     <GalleryView
       gallery={toGallery(g, owner)}
+      justPaid={paid === "1" && !g.settings.hold ? true : paid === "pending" ? false : undefined}
       studio={studio}
       owner={owner ? { clientView: `/g/${g.slug}?as=client`, notes } : undefined}
     />

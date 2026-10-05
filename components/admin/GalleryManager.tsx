@@ -16,7 +16,16 @@ type G = {
   cover: MediaItem | null;
   sections: Section[];
   expired: boolean;
+  clientLogo?: string;
+  paid?: boolean;
 };
+
+const LICENSES: { label: string; text: (client: string) => string }[] = [
+  { label: "Unlimited", text: (c) => `Licensed to ${c || "the client"} for unlimited use, worldwide and in perpetuity: website, social, paid ads, broadcast, events and internal communications. Music is cleared for these uses. Raw footage and project files aren't included.` },
+  { label: "Web & social · 1 yr", text: (c) => `Licensed to ${c || "the client"} for organic and paid web and social media for 12 months from delivery. Broadcast, out-of-home and use by third parties need a separate license. Music is cleared for the same term.` },
+  { label: "Internal only", text: (c) => `Licensed to ${c || "the client"} for internal use only: staff meetings, training, intranet and board presentations. Not for public posting or advertising.` },
+  { label: "Event", text: (c) => `Licensed to ${c || "the client"} for screening at the event and for posting a recap on your own website and social channels. Not for paid advertising.` },
+];
 
 export type ActivityItem = { time: string; event: string; detail: string; visitor: string };
 
@@ -127,6 +136,7 @@ export default function GalleryManager({ gallery, demo, activity }: { gallery: G
     g.hidden ? "Draft — only you can see it" : "Published",
     g.expired && "Expired",
     g.settings.hold && "Awaiting payment",
+    g.paid && "Paid via Stripe",
     plural(g.items.length, "item"),
   ].filter(Boolean).join(" · ");
 
@@ -207,6 +217,7 @@ export default function GalleryManager({ gallery, demo, activity }: { gallery: G
 
         <aside className="mgr-side">
           <Settings g={g} onSave={save} />
+          <ClientLogo g={g} demo={demo} say={say} onChange={(clientLogo) => setG((cur) => ({ ...cur, clientLogo }))} />
           <Activity items={activity} />
           <Danger g={g} demo={demo} say={say} onDeleted={() => { router.push("/admin"); router.refresh(); }} />
         </aside>
@@ -242,7 +253,7 @@ function Uploader({ galleryId, folderId, targetName, demo, onDone, say }: {
     await new Promise<void>((resolve) => {
       const xhr = new XMLHttpRequest();
       xhr.open("PUT", start.uploadUrl);
-      xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+      xhr.setRequestHeader("Content-Type", start.type || file.type || "application/octet-stream");
       xhr.upload.onprogress = (e) => e.lengthComputable && update(job.key, { progress: e.loaded / e.total });
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) update(job.key, { state: "done", progress: 1 });
@@ -280,7 +291,7 @@ function Uploader({ galleryId, folderId, targetName, demo, onDone, say }: {
     if (demo) return say("Demo mode — connect Google to upload.");
     const next: Job[] = [];
     for (const f of Array.from(list)) {
-      if (!/^(image|video)\//.test(f.type)) { say(`${f.name} isn't a photo or video`); continue; }
+      if (!/^(image|video)\//.test(f.type) && !/\.(srt|vtt)$/i.test(f.name)) { say(`${f.name} isn't a photo, video or caption file`); continue; }
       const key = `${f.name}-${f.size}-${f.lastModified}-${Math.random().toString(36).slice(2, 7)}`;
       files.current.set(key, f);
       next.push({ key, name: f.name, size: f.size, folderId, progress: 0, state: "waiting" });
@@ -305,8 +316,9 @@ function Uploader({ galleryId, folderId, targetName, demo, onDone, say }: {
       >
         <Download />
         <b>Drop photos and films here{targetName ? ` — into “${targetName}”` : ""}</b>
-        <span>or click to choose · JPG, PNG, HEIC, MP4, MOV</span>
-        <input ref={input} type="file" multiple accept="image/*,video/*" hidden onChange={(e) => { add(e.target.files); e.target.value = ""; }} />
+        <span>or click to choose · JPG, PNG, HEIC, MP4, MOV, SRT captions</span>
+        <span className="drop-tip">Name formats like “Hero — 16x9.mp4”, “Hero — 9x16.mp4” and they become one film with a format switcher. “Hero.srt” adds captions.</span>
+        <input ref={input} type="file" multiple accept="image/*,video/*,.srt,.vtt" hidden onChange={(e) => { add(e.target.files); e.target.value = ""; }} />
       </div>
 
       {total > 0 && (
@@ -427,6 +439,9 @@ function Settings({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings> & 
     expires: g.settings.expires ?? "",
     hold: !!g.settings.hold,
     picks: !!g.settings.picks,
+    share: g.settings.share !== false,
+    license: g.settings.license ?? "",
+    payUrl: g.settings.payUrl ?? "",
   });
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -456,10 +471,70 @@ function Settings({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings> & 
       <label className="check"><input type="checkbox" checked={f.downloads} onChange={set("downloads")} /> Allow downloads</label>
       <label className="check"><input type="checkbox" checked={f.hold} onChange={set("hold")} /> Hold downloads until paid (watermarked previews)</label>
       <label className="check"><input type="checkbox" checked={f.picks} onChange={set("picks")} /> Let clients heart favorites and send picks</label>
+      <label className="check"><input type="checkbox" checked={f.share} onChange={set("share")} /> Let clients share single films and embed them on their website</label>
       <label className="check"><input type="checkbox" checked={f.hidden} onChange={set("hidden")} /> Draft (hide from client)</label>
+      {f.hold && (
+        <label className="field"><span>Stripe payment link</span>
+          <input value={f.payUrl} onChange={set("payUrl")} placeholder="https://buy.stripe.com/…" inputMode="url" />
+          <small className="hint">Clients see a “Pay invoice” button. Once Stripe confirms payment, downloads unlock on their own.</small>
+        </label>
+      )}
+      <div className="field"><span>Usage rights</span>
+        <div className="presets">
+          {LICENSES.map((l) => (
+            <button key={l.label} type="button" className="chip" onClick={() => setF({ ...f, license: l.text(f.client.trim()) })}>{l.label}</button>
+          ))}
+          {f.license && <button type="button" className="link-btn" onClick={() => setF({ ...f, license: "" })}>Clear</button>}
+        </div>
+        <textarea value={f.license} onChange={set("license")} placeholder="Optional. Shown to the client as a “Usage rights” card." rows={4} />
+      </div>
       <p className="hint">Renaming changes the link. Changing the password signs out anyone using the old one. After the closing date, clients see a “gallery closed” page.</p>
       <button className="btn primary" disabled={busy} style={{ width: "100%", justifyContent: "center" }}>{busy ? "Saving…" : "Save changes"}</button>
     </form>
+  );
+}
+
+// ------------------------------------------------------------------ client logo
+
+function ClientLogo({ g, demo, say, onChange }: { g: G; demo: boolean; say: (t: string) => void; onChange: (url?: string) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function upload(file?: File) {
+    if (!file) return;
+    if (demo) return say("Demo mode — connect Google to upload.");
+    setBusy(true);
+    const start = await api(`/api/admin/galleries/${g.id}/logo`, { method: "POST", body: JSON.stringify({ type: file.type, size: file.size }) });
+    if (!start.ok) { setBusy(false); return say(start.error || "Couldn't upload"); }
+    const ok = await fetch(start.uploadUrl, { method: "PUT", headers: { "Content-Type": start.type }, body: file }).then((r) => r.ok).catch(() => false);
+    setBusy(false);
+    if (!ok) return say("Upload failed — try again");
+    onChange(URL.createObjectURL(file));
+    say("Client logo added");
+  }
+
+  async function remove() {
+    setBusy(true);
+    const res = await api(`/api/admin/galleries/${g.id}/logo`, { method: "DELETE" });
+    setBusy(false);
+    if (!res.ok) return say(res.error || "Couldn't remove");
+    onChange(undefined);
+    say("Client logo removed");
+  }
+
+  return (
+    <div className="panel">
+      <h3>Client logo</h3>
+      <p className="hint" style={{ marginTop: 0 }}>Shows as “Prepared for” next to your logo on the gallery, film pages and link previews.</p>
+      {g.clientLogo ? (
+        <div className="logo-prev"><img src={g.clientLogo} alt="" /></div>
+      ) : null}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button type="button" className="btn" disabled={busy} onClick={() => input.current?.click()}>{busy ? "Working…" : g.clientLogo ? "Replace" : "Upload logo"}</button>
+        {g.clientLogo && <button type="button" className="btn" disabled={busy} onClick={remove}>Remove</button>}
+      </div>
+      <input ref={input} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ""; }} />
+    </div>
   );
 }
 

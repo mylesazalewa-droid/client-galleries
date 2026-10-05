@@ -53,11 +53,11 @@ function visitor(req: Request) {
 export type LogInput = { galleryId: string; title: string; event: string; detail?: string };
 
 /** Records an event after the response is sent. Skips the owner's own visits. */
-export async function logEvent(req: Request, e: LogInput, opts: { includeOwner?: boolean } = {}) {
+export async function logEvent(req: Request, e: LogInput, opts: { includeOwner?: boolean; wait?: boolean } = {}) {
   if (isDemo) return;
   if (!opts.includeOwner && (await readSession())) return;
   const row = [stamp(), e.title, e.event, e.detail ?? "", visitor(req), e.galleryId, new Date().toISOString()];
-  after(async () => {
+  const write = async () => {
     try {
       const id = await findActivitySheet();
       if (!id) return;
@@ -71,7 +71,10 @@ export async function logEvent(req: Request, e: LogInput, opts: { includeOwner?:
     } catch (err) {
       console.warn("activity log failed", err);
     }
-  });
+  };
+  // "wait" writes before responding (payments); everything else is logged after the response is sent.
+  if (opts.wait) await write();
+  else after(write);
 }
 
 export type ActivityRow = { time: string; gallery: string; event: string; detail: string; visitor: string; galleryId: string; at: string };

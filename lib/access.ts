@@ -38,3 +38,13 @@ export async function viewerState(g: GalleryRecord) {
     canDownload: owner || (g.settings.downloads !== false && !g.settings.hold),
   };
 }
+
+/**
+ * Access check for file routes: the gallery password cookie, the owner, or a valid share key
+ * for this exact file (single-film links and website embeds).
+ */
+export async function canAccessFile(g: GalleryRecord, fileId: string, req: Request) {
+  if (await canView(g)) return true;
+  const { shareAllowed, validKey } = await import("./share");
+  return shareAllowed(g) && validKey(g.slug, fileId, new URL(req.url).searchParams.get("k"));
+}

@@ -3,7 +3,7 @@ import { Readable } from "stream";
 import { canView, viewerState } from "@/lib/access";
 import { logEvent } from "@/lib/activity";
 import { isDemo } from "@/lib/config";
-import { getRecord } from "@/lib/galleries";
+import { allFiles, getRecord } from "@/lib/galleries";
 import { driveMedia } from "@/lib/google";
 import { disposition } from "@/lib/http";
 
@@ -22,8 +22,9 @@ export async function GET(req: Request, ctx: { params: Promise<{ slug: string }>
 
   const only = new URL(req.url).searchParams.get("only");
   const section = new URL(req.url).searchParams.get("section");
-  const items = g.items
-    .filter((i) => !only || (only === "photos" ? i.kind === "photo" : i.kind === "video"))
+  // Includes every format of each film and caption files.
+  const items = allFiles(g)
+    .filter((i) => !only || (only === "photos" ? i.kind === "photo" : i.kind !== "photo"))
     .filter((i) => section === null || i.section === section);
   const sectionName = section ? g.sections.find((s) => s.id === section)?.name : undefined;
   await logEvent(req, { galleryId: g.id, title: g.title, event: "Downloaded all", detail: [sectionName, only, `${items.length} files`].filter(Boolean).join(" · ") });

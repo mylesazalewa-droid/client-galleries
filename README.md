@@ -94,6 +94,7 @@ Copy `.env.example` to `.env.local` and fill in:
 | `SELECTIONS_SHEET_ID` | Sheet ID from step 3 |
 | `GALLERY_SECRET` | Any long random string |
 | `STUDIO_NAME`, `STUDIO_TAGLINE`, `STUDIO_URL`, `STUDIO_EMAIL` | Your branding |
+| `STRIPE_SECRET_KEY` | Optional. Restricted Stripe key (Checkout Sessions: Read) for pay-to-unlock |
 | `SHOW_INDEX` | `true` to list unlocked galleries on the home page (off by default) |
 | `RESEND_API_KEY`, `NOTIFY_EMAIL` | Optional email alert via resend.com instead of Sheets notifications |
 
@@ -112,6 +113,12 @@ Copy `.env.example` to `.env.local` and fill in:
 - **Favorites & picks**: off by default (galleries are for finished deliverables); turn on per gallery if you want clients to heart and send picks.
 - **Activity**: views, unlocks, downloads and picks go to the **Client Galleries — Activity** sheet inside CLIENTS, and show on the dashboard. For email alerts, open the sheet → Tools → Notification settings → Edit notifications → “Any changes are made” → “Email – daily digest” (or “right away”).
 - **Branding**: dashboard → Branding: studio name, tagline, landing headline, contact email, website, accent color, logo and a landing background (photo or short muted reel). Saved in CLIENTS/brand.json and CLIENTS/_brand.
+- **Film formats & captions**: name files like `Hero — 16x9.mp4`, `Hero — 9x16.mp4`, `Hero — 1x1.mp4` and they appear as one film with a format switcher (all formats download from one menu). Drop in `Hero.srt` (or `Hero.en.srt`) and it becomes captions for that film.
+- **Share & embed a single film**: the share button in the viewer gives a link to just that film plus an iframe embed code for the client's website. Turn it off per gallery with “Let clients share single films…”. Not available while a payment hold is on.
+- **Link previews**: gallery and film links unfurl in iMessage/Slack/email with the cover, title, your logo and “Prepared for <client>” (the cover is left out for password-protected or on-hold galleries).
+- **Client logo**: upload it in the gallery manager; it shows as “Prepared for” on the gallery, film pages and previews.
+- **Usage rights**: pick a preset (Unlimited, Web & social 1 yr, Internal, Event) or write your own; clients see it as a card.
+- **Pay to unlock (Stripe)**: add a restricted key with *Checkout Sessions: Read* to Vercel as `STRIPE_SECRET_KEY`. For each invoice, create a Stripe Payment Link whose “After payment” redirect is `https://client-galleries.vercel.app/api/paid?session_id={CHECKOUT_SESSION_ID}`, and paste the link into the gallery's settings (shown when “Hold downloads until paid” is on). Clients see “Pay invoice”; after Stripe confirms, a “Paid” row is written to the activity sheet and the gallery unlocks on its own.
 - **Owner preview**: when you're signed in you see everything; use “See what clients see” (or add `?as=client` to a gallery link) to check the password screen, watermarks and expiry.
 
 ## Good to know

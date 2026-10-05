@@ -81,6 +81,9 @@ function cleanSettings(s: GallerySettings): GallerySettings {
   if (s.expires?.trim()) out.expires = s.expires.trim();
   if (s.hold) out.hold = true;
   if (s.picks) out.picks = true;
+  if (s.share === false) out.share = false;
+  if (s.license?.trim()) out.license = s.license.trim();
+  if (s.payUrl?.trim()) out.payUrl = s.payUrl.trim();
   return out;
 }
 

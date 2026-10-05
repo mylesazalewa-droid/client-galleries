@@ -13,10 +13,11 @@ export const POST = adminRoute(async (req: Request) => {
   if (!g) return Response.json({ ok: false, error: "Gallery not found" }, { status: 404 });
 
   const name = String(body.name ?? "").replace(/[\\/]/g, "_").slice(0, 200);
-  const type = String(body.type ?? "");
+  const caption = /\.(srt|vtt)$/i.test(name);
+  const type = caption ? (/\.vtt$/i.test(name) ? "text/vtt" : "application/x-subrip") : String(body.type ?? "");
   const size = Number(body.size ?? 0);
   if (!name || !size) return Response.json({ ok: false, error: "Missing file details" }, { status: 400 });
-  if (!ALLOWED.test(type)) return Response.json({ ok: false, error: `${name} isn't a photo or video` }, { status: 400 });
+  if (!caption && !ALLOWED.test(type)) return Response.json({ ok: false, error: `${name} isn't a photo, video or caption file` }, { status: 400 });
 
   // Upload into the main area or one of the gallery's sections.
   const folderId = body.folderId ? String(body.folderId) : g.id;
@@ -28,5 +29,5 @@ export const POST = adminRoute(async (req: Request) => {
   const { token } = await ownerToken();
   const origin = req.headers.get("origin") || new URL(req.url).origin;
   const uploadUrl = await startUpload(token, folderId, { name, type, size }, origin);
-  return Response.json({ ok: true, uploadUrl });
+  return Response.json({ ok: true, uploadUrl, type });
 });

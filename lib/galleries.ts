@@ -4,6 +4,8 @@ import { cacheTtl, isDemo, rootFolderIdEnv, rootFolderName } from "./config";
 import { demoGalleries } from "./demo";
 import { drive } from "./google";
 import type { Gallery, GallerySettings, GallerySummary, MediaItem, Section } from "./types";
+import { fileKey } from "./share";
+import { groupVersions } from "./versions";
 
 /**
  * Internal record of a gallery. Holds the password, which never leaves the server.
@@ -20,7 +22,16 @@ export type GalleryRecord = {
   settingsFileId?: string;
   /** Subfolders of the gallery, shown as sections */
   sections: Section[];
+  /** Alternate film formats and caption files: not shown in the grid, but streamable/downloadable */
+  extras: MediaItem[];
+  /** "_client-logo.*" inside the gallery folder */
+  clientLogoId?: string;
+  /** a Stripe payment for this gallery was confirmed */
+  paid?: boolean;
 };
+
+/** Gallery-folder file name for the client's logo (hidden from the grid by the leading underscore). */
+export const CLIENT_LOGO = "_client-logo";
 
 /** Folders/files inside CLIENTS that aren't galleries. */
 export const BRAND_FOLDER = "_brand";
@@ -34,6 +45,7 @@ export function isExpired(s: GallerySettings, now = new Date()) {
 export const SETTINGS_FILE = "gallery.json";
 export const FOLDER_MIME = "application/vnd.google-apps.folder";
 const IMAGE = /^image\/(jpeg|png|webp|heic|heif|gif|tiff)$/;
+const CAPTION = /\.(srt|vtt)$/i;
 const VIDEO = /^video\//;
 
 export function slugify(s: string) {
@@ -94,8 +106,13 @@ export async function findItem(slug: string, id: string) {
   // Includes drafts so the dashboard can show their thumbnails; the link code + file ID are both unguessable.
   const g = (await loadAll()).find((r) => r.slug === slug);
   if (!g) return null;
-  const item = g.items.find((i) => i.id === id) ?? (g.cover?.id === id ? g.cover : undefined);
+  const item = g.items.find((i) => i.id === id) ?? g.extras.find((i) => i.id === id) ?? (g.cover?.id === id ? g.cover : undefined);
   return item ? { gallery: g, item } : null;
+}
+
+/** Every downloadable file in a gallery: grid items plus alternate formats and captions. */
+export function allFiles(g: GalleryRecord) {
+  return [...g.items, ...g.extras];
 }
 
 // ---------------------------------------------------------------- public shapes
@@ -116,6 +133,7 @@ export function toSummary(g: GalleryRecord): GallerySummary {
 
 export function toGallery(g: GalleryRecord, asOwner = false): Gallery {
   const hold = !!g.settings.hold;
+  const logoV = g.clientLogoId ? g.clientLogoId.slice(-8) : "";
   return {
     ...toSummary(g),
     message: g.settings.message,
@@ -127,7 +145,27 @@ export function toGallery(g: GalleryRecord, asOwner = false): Gallery {
     items: g.items,
     sections: g.sections,
     zip: `/api/zip/${g.slug}`,
+    share: g.settings.share !== false && !hold,
+    shareKeys:
+      g.settings.share !== false && !hold
+        ? Object.fromEntries(g.items.filter((i) => i.kind === "video").map((i) => [i.id, fileKey(g.slug, i.id)]))
+        : undefined,
+    license: g.settings.license,
+    payUrl: hold ? payLink(g) : undefined,
+    clientLogo: g.clientLogoId ? `/api/client-logo/${g.slug}?v=${logoV}` : undefined,
   };
+}
+
+/** The Stripe Payment Link with this gallery tagged, so the payment can be matched back to it. */
+export function payLink(g: GalleryRecord) {
+  if (!g.settings.payUrl) return undefined;
+  try {
+    const u = new URL(g.settings.payUrl);
+    u.searchParams.set("client_reference_id", g.id);
+    return u.toString();
+  } catch {
+    return undefined;
+  }
 }
 
 // ---------------------------------------------------------------- Google Drive
@@ -190,6 +228,9 @@ function toItem(f: DriveFile, slug: string, section = ""): MediaItem | null {
     const w = m.width || 3, h = m.height || 2;
     return { ...base, kind: "photo", width: rotated ? h : w, height: rotated ? w : h };
   }
+  if (CAPTION.test(f.name)) {
+    return { ...base, kind: "caption", width: 0, height: 0, thumb: "", full: "", src: `/api/captions/${f.id}?${q}` };
+  }
   if (VIDEO.test(f.mimeType)) {
     const m = f.videoMediaMetadata ?? {};
     return {
@@ -243,10 +284,16 @@ async function loadFromDrive(force = false): Promise<GalleryRecord[]> {
         ]);
         const sections: Section[] = sectionFolders.map((sf) => ({ id: sf.id!, name: sf.name! }));
 
-        const media = [
+        const all = [
           ...files.filter(visible).map((f) => toItem(f, slug)),
           ...sectionFolders.flatMap((sf, i) => sectionFiles[i].filter(visible).map((f) => toItem(f, slug, sf.id!))),
         ].filter((x): x is MediaItem => !!x);
+        // Formats of the same film collapse into one item; captions attach to their film.
+        const { items: media, extras } = groupVersions(
+          all.filter((i) => i.kind !== "caption"),
+          all.filter((i) => i.kind === "caption"),
+        );
+        const clientLogo = files.find((f) => f.name?.startsWith(CLIENT_LOGO) && IMAGE.test(f.mimeType ?? ""));
 
         // A file named cover.* (or the one named in gallery.json) becomes the hero, not a grid item.
         const coverName = settings.cover?.toLowerCase();
@@ -257,9 +304,23 @@ async function loadFromDrive(force = false): Promise<GalleryRecord[]> {
         const items = settings.cover ? media : media.filter((i) => i !== cover);
 
         const hidden = folder.name!.startsWith("_") || settings.hidden === true;
-        return { id: folder.id!, slug, title, settings, items, cover, hidden, sections, settingsFileId: settingsFile?.id ?? undefined };
+        return {
+          id: folder.id!, slug, title, settings, items, cover, hidden, sections, extras,
+          clientLogoId: clientLogo?.id ?? undefined,
+          settingsFileId: settingsFile?.id ?? undefined,
+        };
       }),
   );
+
+  // Galleries paid through Stripe come off hold automatically.
+  const { paidGalleries } = await import("./payments");
+  const paid = await paidGalleries().catch(() => new Set<string>());
+  for (const r of records) {
+    if (paid.has(r.id)) {
+      r.paid = true;
+      r.settings = { ...r.settings, hold: false };
+    }
+  }
 
   return records.sort((a, b) => (b.settings.date ?? "").localeCompare(a.settings.date ?? ""));
 }

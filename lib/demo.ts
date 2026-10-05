@@ -1,5 +1,6 @@
 import type { GalleryRecord } from "./galleries";
 import type { MediaItem } from "./types";
+import { groupVersions } from "./versions";
 
 // Demo mode: sample photos are drawn by /api/demo, and one tiny clip lives in /public/demo.
 const sizes: [number, number][] = [
@@ -14,12 +15,16 @@ function photo(i: number): MediaItem {
   return { id: name, name, kind: "photo", width, height, thumb: url, full: url, download: url, section: i >= 8 ? "demo-stills" : "" };
 }
 
-function film(name: string, seed: number, duration: number): MediaItem {
-  const poster = `/api/demo/poster-${seed}.svg?w=1280&h=720`;
+function film(name: string, seed: number, duration: number, width = 16, height = 9): MediaItem {
+  const poster = `/api/demo/poster-${seed}.svg?w=${width > height ? 1280 : 720}&h=${width > height ? 720 : width === height ? 720 : 1280}`;
   return {
-    id: name, name, kind: "video", width: 16, height: 9, duration,
+    id: name, name, kind: "video", width, height, duration,
     thumb: poster, full: poster, src: "/demo/film.mp4", download: "/demo/film.mp4", section: "",
   };
+}
+
+function caption(name: string): MediaItem {
+  return { id: name, name, kind: "caption", width: 0, height: 0, thumb: "", full: "", src: "/demo/captions.vtt", download: "/demo/captions.vtt", section: "" };
 }
 
 export function demoGalleries(): GalleryRecord[] {
@@ -32,19 +37,25 @@ export function demoGalleries(): GalleryRecord[] {
       settings: {
         client: "Lakeshore Credit Union",
         date: "2026-09-18",
-        message: "Final cuts, social versions and stills from the two-day shoot. Heart anything you'd like to use and send your picks when you're ready.",
+        message: "Your brand film in every format, plus stills from the two-day shoot.",
+        license: "Licensed for Lakeshore Credit Union's website, social channels and internal events through October 2027.\nMusic is licensed for web and social. Paid advertising or broadcast needs an upgraded music license.",
       },
+      clientLogoId: undefined,
       cover: p[2],
       sections: [{ id: "demo-stills", name: "Behind the scenes" }],
-      items: [film("01 Hero cut.mp4", 21, 5), p[0], p[1], film("02 Social cut.mp4", 26, 5), p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[10], p[11]],
+      ...groupVersions(
+        [film("Hero cut — 16x9.mp4", 21, 5), film("Hero cut — 9x16.mp4", 23, 5, 9, 16), film("Hero cut — 1x1.mp4", 24, 5, 1, 1), p[0], p[1], film("Social teaser.mp4", 26, 5), p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[10], p[11]],
+        [caption("Hero cut.en.srt")],
+      ),
     },
     {
       id: "demo-2",
       slug: "fall-leadership-conference",
       title: "Fall Leadership Conference",
-      settings: { client: "Great Lakes Financial Network", date: "2026-08-02", password: "demo", hold: true },
+      settings: { client: "Great Lakes Financial Network", date: "2026-08-02", password: "demo", hold: true, payUrl: "https://buy.stripe.com/test_demo" },
       cover: p[9],
       sections: [],
+      extras: [],
       items: [p[6], p[7], p[8], p[10], p[11], film("Conference recap.mp4", 22, 5)].map((x) => ({ ...x, section: "" })),
     },
   ];

@@ -2,8 +2,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MediaItem } from "@/lib/types";
 import { plural } from "@/lib/format";
-import { Close, Download, Heart, Left, Note, Right } from "./icons";
+import { Close, Heart, Left, Note, Right, Share } from "./icons";
 import { Watermark } from "./Brand";
+import DownloadMenu from "./DownloadMenu";
+import FilmPlayer from "./FilmPlayer";
+import ShareDialog from "./ShareDialog";
 
 type Fav = { note: string };
 
@@ -20,6 +23,9 @@ type Props = {
   picks: boolean;
   /** studio name to overlay while a payment hold is on */
   watermark?: string;
+  /** gallery slug when single films can be shared/embedded */
+  shareSlug?: string;
+  shareKeys?: Record<string, string>;
 };
 
 type Pt = { x: number; y: number };
@@ -28,8 +34,9 @@ const mid = (a: Pt, b: Pt) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const MAX_ZOOM = 4;
 
-export default function Lightbox({ items, index, onIndex, onClose, favs, onToggleFav, onNote, allowDownload, picks, watermark }: Props) {
+export default function Lightbox({ items, index, onIndex, onClose, favs, onToggleFav, onNote, allowDownload, picks, watermark, shareSlug, shareKeys }: Props) {
   const item = items[index];
+  const [sharing, setSharing] = useState(false);
   const [dir, setDir] = useState<"next" | "prev" | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
   const [hiLoaded, setHiLoaded] = useState(false);
@@ -245,7 +252,7 @@ export default function Lightbox({ items, index, onIndex, onClose, favs, onToggl
     <div ref={rootRef} className={`lb ${item.kind === "video" ? "is-video" : ""}`} role="dialog" aria-modal="true" aria-label={item.name}>
       <div className="lb-top">
         <div className="meta">
-          <b>{item.name}</b>
+          <b>{item.title ?? item.name}</b>
           <small>{index + 1} of {plural(items.length, "item")}</small>
         </div>
         {picks && (
@@ -263,11 +270,10 @@ export default function Lightbox({ items, index, onIndex, onClose, favs, onToggl
             </button>
           </>
         )}
-        {allowDownload && (
-          <a className="icon-btn" href={item.download} download={item.name} aria-label="Download" title="Download">
-            <Download />
-          </a>
+        {shareSlug && item.kind === "video" && (
+          <button className="icon-btn" onClick={() => setSharing(true)} aria-label="Share or embed this film" title="Share / embed"><Share /></button>
         )}
+        {allowDownload && <DownloadMenu item={item} />}
         <button className="icon-btn" onClick={onClose} aria-label="Close" title="Close (Esc)"><Close /></button>
       </div>
 
@@ -294,20 +300,11 @@ export default function Lightbox({ items, index, onIndex, onClose, favs, onToggl
                 />
               </>
             ) : (
-              <video
-                src={item.src}
-                poster={item.full}
-                controls
-                autoPlay
-                playsInline
-                preload="metadata"
-                controlsList={allowDownload ? undefined : "nodownload"}
-                disablePictureInPicture={!!watermark}
-                onContextMenu={watermark ? (e) => e.preventDefault() : undefined}
-                style={{ position: "absolute", inset: 0 }}
-              />
+              <div style={{ position: "absolute", inset: 0 }}>
+                <FilmPlayer item={item} autoPlay allowDownload={allowDownload} watermark={watermark} />
+              </div>
             )}
-            {watermark && <Watermark text={watermark} count={48} />}
+            {watermark && item.kind === "photo" && <Watermark text={watermark} count={48} />}
           </div>
         </div>
         <button className="lb-arrow prev" onClick={() => go(-1)} disabled={index === 0} aria-label="Previous"><Left /></button>
@@ -328,6 +325,14 @@ export default function Lightbox({ items, index, onIndex, onClose, favs, onToggl
             <button className="btn primary" style={{ height: 36 }} onClick={() => setNoteOpen(false)}>Done</button>
           </div>
         </div>
+      )}
+      {sharing && shareSlug && (
+        <ShareDialog
+          title={item.title ?? item.name}
+          path={`/f/${shareSlug}/${encodeURIComponent(item.id)}${shareKeys?.[item.id] ? `?k=${shareKeys[item.id]}` : ""}`}
+          embedPath={`/embed/${shareSlug}/${encodeURIComponent(item.id)}${shareKeys?.[item.id] ? `?k=${shareKeys[item.id]}` : ""}`}
+          onClose={() => setSharing(false)}
+        />
       )}
     </div>
   );

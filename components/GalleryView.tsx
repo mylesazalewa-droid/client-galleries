@@ -15,9 +15,11 @@ type Props = {
   studio: Studio;
   /** set when the owner is viewing: shows a banner with a link to the client view */
   owner?: { clientView: string; notes: string[] };
+  /** true right after a Stripe payment unlocked the gallery; false while it's still processing */
+  justPaid?: boolean;
 };
 
-export default function GalleryView({ gallery, studio, owner }: Props) {
+export default function GalleryView({ gallery, studio, owner, justPaid }: Props) {
   const favKey = `favs:${gallery.slug}`;
   const picksOn = gallery.picks;
   const [favs, setFavs] = useState<Record<string, Fav>>({});
@@ -147,6 +149,12 @@ export default function GalleryView({ gallery, studio, owner }: Props) {
           <ThemeToggle className="icon-btn" />
         </div>
         <div className="hero-body">
+          {gallery.clientLogo && (
+            <div className="prepared">
+              <span>Prepared for</span>
+              <img src={gallery.clientLogo} alt={gallery.client ?? "Client"} />
+            </div>
+          )}
           {meta && <div className="eyebrow">{meta}</div>}
           <h1 className="serif">{gallery.title}</h1>
           {gallery.message && <p>{gallery.message}</p>}
@@ -198,9 +206,22 @@ export default function GalleryView({ gallery, studio, owner }: Props) {
         </div>
       </nav>
 
-      {gallery.hold && (
+      {justPaid === true && (
+        <div className="hold-bar paid" role="status">
+          <Check />
+          <span><b>Payment received — thank you!</b> Everything is unlocked and ready to download.</span>
+        </div>
+      )}
+      {justPaid === false && gallery.hold && (
+        <div className="hold-bar" role="status">
+          <span><b>Payment is processing.</b> Downloads unlock as soon as it clears. Refresh this page in a few minutes.</span>
+        </div>
+      )}
+      {gallery.hold && justPaid !== false && (
         <div className="hold-bar">
-          <Lock /> <span><b>Preview only.</b> Full-resolution downloads unlock once the project is paid.</span>
+          <Lock />
+          <span><b>Preview only.</b> Full-resolution downloads unlock once the project is paid.</span>
+          {gallery.payUrl && <a className="btn primary pay-btn" href={gallery.payUrl}>Pay invoice</a>}
         </div>
       )}
 
@@ -252,6 +273,15 @@ export default function GalleryView({ gallery, studio, owner }: Props) {
             )}
           </div>
         )}
+        {gallery.license && (
+          <section className="rights" aria-labelledby="rights-title">
+            <h2 id="rights-title" className="serif">Usage rights</h2>
+            <div className="rights-body">
+              {gallery.license.split(/\n+/).map((line, i) => <p key={i}>{line}</p>)}
+            </div>
+            {studio.email && <a className="link-dl" href={`mailto:${studio.email}?subject=${encodeURIComponent(`Usage question: ${gallery.title}`)}`}>Questions about usage? Email {studio.name.split(" ")[0]}</a>}
+          </section>
+        )}
         <p className="foot">
           {studio.name}
           {studio.email && <> · <a href={`mailto:${studio.email}`}>{studio.email}</a></>}
@@ -278,6 +308,8 @@ export default function GalleryView({ gallery, studio, owner }: Props) {
           allowDownload={gallery.allowDownload}
           picks={picksOn}
           watermark={gallery.hold ? studio.name : undefined}
+          shareSlug={gallery.share ? gallery.slug : undefined}
+          shareKeys={gallery.shareKeys}
         />
       )}
 
@@ -308,12 +340,26 @@ type TileProps = {
 
 function Tile({ item, delay, fav, picks, watermark, onOpen, onFav, canDownload }: TileProps) {
   const [loaded, setLoaded] = useState(false);
+  const [hover, setHover] = useState(false);
+  // Desktop only: films play silently while the pointer rests on them.
+  const canHover = useRef(false);
+  useEffect(() => {
+    canHover.current = window.matchMedia("(hover: hover) and (pointer: fine)").matches && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }, []);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const enter = () => {
+    if (item.kind !== "video" || !canHover.current) return;
+    hoverTimer.current = setTimeout(() => setHover(true), 220);
+  };
+  const leave = () => { clearTimeout(hoverTimer.current); setHover(false); };
   const r = item.width / item.height;
   return (
     <div
       className="tile"
       style={{ "--r": r.toFixed(4), "--d": `${delay}ms` } as React.CSSProperties}
       onClick={onOpen}
+      onMouseEnter={enter}
+      onMouseLeave={leave}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }}
       onContextMenu={watermark ? (e) => e.preventDefault() : undefined}
       role="button"
@@ -331,12 +377,17 @@ function Tile({ item, delay, fav, picks, watermark, onOpen, onFav, canDownload }
         onLoad={() => setLoaded(true)}
         ref={(el) => { if (el?.complete && el.naturalWidth && !loaded) setLoaded(true); }}
       />
+      {hover && item.src && <video className="peek" src={item.src} muted autoPlay loop playsInline preload="auto" />}
       {watermark && <Watermark text={watermark} />}
       <span className="shade" />
       {item.kind === "video" && (
         <>
-          <span className="play"><span><Play /></span></span>
-          {item.duration ? <span className="dur">{formatDuration(item.duration)}</span> : null}
+          <span className={`play ${hover ? "hide" : ""}`}><span><Play /></span></span>
+          <span className="badges">
+            {item.duration ? <span className="dur">{formatDuration(item.duration)}</span> : null}
+            {item.versions && item.versions.length > 1 ? <span className="badge">{item.versions.length} formats</span> : null}
+            {item.captions?.length ? <span className="badge">CC</span> : null}
+          </span>
         </>
       )}
       {picks && fav?.note ? <span className="note-dot" title={fav.note}><Note /></span> : null}
@@ -356,7 +407,7 @@ function Tile({ item, delay, fav, picks, watermark, onOpen, onFav, canDownload }
           href={item.download}
           download={item.name}
           onClick={(e) => e.stopPropagation()}
-          aria-label={`Download ${item.name}`}
+          aria-label={`Download ${item.title ?? item.name}`}
           title="Download"
         >
           <Download />

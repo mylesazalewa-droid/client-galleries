@@ -35,6 +35,8 @@ export default async function ManagePage({ params }: { params: Promise<{ id: str
           cover: g.cover ?? null,
           sections: g.sections,
           expired: isExpired(g.settings),
+          clientLogo: g.clientLogoId ? `/api/client-logo/${g.slug}?v=${g.clientLogoId.slice(-8)}` : undefined,
+          paid: !!g.paid,
         }}
       />
     </AdminShell>

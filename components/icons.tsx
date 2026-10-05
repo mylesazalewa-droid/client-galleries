@@ -48,3 +48,6 @@ export const Photo = () => (
 export const Check = () => (
   <svg {...base} aria-hidden><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
 );
+export const Share = () => (
+  <svg {...base} aria-hidden><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8M5 12.5v6A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5v-6" /></svg>
+);

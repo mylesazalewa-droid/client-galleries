@@ -19,9 +19,13 @@ export const PATCH = adminRoute(async (req: Request, ctx: Ctx) => {
     const title = typeof body.title === "string" ? body.title.trim().slice(0, 120) : g.title;
     if (title && title !== g.title) await renameFolder(token, id, title);
 
-    const keys: (keyof GallerySettings)[] = ["client", "date", "message", "password", "downloads", "cover", "hidden", "expires", "hold", "picks"];
+    const keys: (keyof GallerySettings)[] = ["client", "date", "message", "password", "downloads", "cover", "hidden", "expires", "hold", "picks", "share", "license", "payUrl"];
     const next: GallerySettings = { ...g.settings };
     for (const k of keys) if (k in body) (next as Record<string, unknown>)[k] = body[k];
+    if (next.payUrl && !/^https:\/\/\S+$/i.test(String(next.payUrl).trim())) {
+      return Response.json({ ok: false, error: "The payment link should start with https://" }, { status: 400 });
+    }
+    if (typeof next.license === "string") next.license = next.license.slice(0, 1500);
     await writeSettings(token, id, g.settingsFileId, next);
 
     clearCache();

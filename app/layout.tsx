@@ -3,7 +3,12 @@ import { getStudio, inkFor } from "@/lib/brand";
 import { studio } from "@/lib/config";
 import "./globals.css";
 
+const site =
+  process.env.SITE_URL ||
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "http://localhost:3000");
+
 export const metadata: Metadata = {
+  metadataBase: new URL(site),
   title: { default: studio.name, template: `%s · ${studio.name}` },
   description: `${studio.tagline} — client galleries`,
   robots: { index: false, follow: false },
