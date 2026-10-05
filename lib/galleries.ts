@@ -49,7 +49,7 @@ let cache: { at: number; data: Promise<GalleryRecord[]> } | null = null;
 
 export function loadAll(force = false): Promise<GalleryRecord[]> {
   if (!force && cache && Date.now() - cache.at < cacheTtl) return cache.data;
-  const data = isDemo ? Promise.resolve(demoGalleries()) : loadFromDrive();
+  const data = isDemo ? Promise.resolve(demoGalleries()) : loadFromDrive(force);
   cache = { at: Date.now(), data };
   data.catch(() => (cache = null));
   return data;
@@ -68,8 +68,13 @@ export async function getRecord(slug: string) {
 
 /** Dashboard lookup by Drive folder ID (includes drafts). */
 export async function getRecordById(id: string, force = false) {
-  const all = await loadAll(force);
-  return all.find((g) => g.id === id) ?? null;
+  let found = (await loadAll(force)).find((g) => g.id === id) ?? null;
+  // Drive can take a moment to list a folder that was just created; look again before giving up.
+  for (let i = 0; !found && i < 3; i++) {
+    if (i > 0 || force) await new Promise((r) => setTimeout(r, 1200));
+    found = (await loadAll(true)).find((g) => g.id === id) ?? null;
+  }
+  return found;
 }
 
 /** Look up a file only within the given gallery, so file IDs can't reach anything else in Drive. */
@@ -184,7 +189,8 @@ let rootCache: { at: number; id: string | null } | null = null;
 /** The parent "Client Galleries" folder: from DRIVE_ROOT_FOLDER_ID, or found by name among folders shared with the service account. */
 export async function resolveRoot(force = false): Promise<string | null> {
   if (rootFolderIdEnv) return rootFolderIdEnv;
-  if (!force && rootCache && Date.now() - rootCache.at < 10 * 60_000) return rootCache.id;
+  // Only remember a folder that exists; "not found yet" is always re-checked.
+  if (!force && rootCache?.id && Date.now() - rootCache.at < 10 * 60_000) return rootCache.id;
   const name = rootFolderName.replace(/'/g, "\\'");
   const found = await listChildren(`name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
   const id = found[0]?.id ?? null;
@@ -192,8 +198,8 @@ export async function resolveRoot(force = false): Promise<string | null> {
   return id;
 }
 
-async function loadFromDrive(): Promise<GalleryRecord[]> {
-  const root = await resolveRoot();
+async function loadFromDrive(force = false): Promise<GalleryRecord[]> {
+  const root = await resolveRoot(force);
   if (!root) return [];
   const folders = await listChildren(
     `'${root}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
