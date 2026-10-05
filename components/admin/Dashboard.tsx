@@ -19,6 +19,8 @@ export type DashGallery = {
   coverThumb?: string;
   expired: boolean;
   hold: boolean;
+  /** "$2,500.00" when a payment request is open */
+  due?: string;
   expires?: string;
   views: number;
   downloads: number;
@@ -45,7 +47,9 @@ export function ago(iso?: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-export default function Dashboard({ galleries, demo, loadError, rootMissing, activityUrl }: Props) {
+export type PaymentRow = { galleryId: string; gallery: string; event: string; detail: string; time: string };
+
+export default function Dashboard({ galleries, demo, loadError, rootMissing, activityUrl, payments = [] }: Props & { payments?: PaymentRow[] }) {
   const [creating, setCreating] = useState(false);
   const router = useRouter();
 
@@ -73,6 +77,35 @@ export default function Dashboard({ galleries, demo, loadError, rootMissing, act
         </div>
       </div>
 
+      {(galleries.some((g) => g.due && g.hold) || payments.length > 0) && (
+        <section className="pay-overview">
+          <div>
+            <div className="eyebrow">Outstanding</div>
+            {galleries.filter((g) => g.due && g.hold).length ? (
+              <ul>
+                {galleries.filter((g) => g.due && g.hold).map((g) => (
+                  <li key={g.id}><Link href={`/admin/g/${g.id}`}>{g.title}</Link><b>{g.due}</b></li>
+                ))}
+              </ul>
+            ) : <p className="hint">Nothing waiting. 🎉</p>}
+          </div>
+          <div>
+            <div className="eyebrow">Recent payments</div>
+            {payments.length ? (
+              <ul>
+                {payments.map((p, i) => (
+                  <li key={i}>
+                    <Link href={`/admin/g/${p.galleryId}`}>{p.gallery}</Link>
+                    <b>{p.detail.split(" · ")[0] || p.event}</b>
+                    <span>{p.event === "Marked paid" ? "marked by you" : "Stripe"} · {p.time}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="hint">None yet.</p>}
+          </div>
+        </section>
+      )}
+
       {loadError && <p className="error">{loadError}</p>}
       {rootMissing && (
         <div className="notice" style={{ marginTop: 0, marginBottom: 20 }}>
@@ -89,7 +122,7 @@ export default function Dashboard({ galleries, demo, loadError, rootMissing, act
                 <span className="dash-tags">
                   {g.hidden && <span className="tag">Draft</span>}
                   {g.expired && <span className="tag warn">Expired</span>}
-                  {g.hold && <span className="tag">Awaiting payment</span>}
+                  {g.hold && <span className="tag">{g.due ? `Awaiting ${g.due}` : "Awaiting payment"}</span>}
                   {g.locked && <span className="tag"><Lock /> Password</span>}
                 </span>
               </Link>

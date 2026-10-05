@@ -2,16 +2,23 @@ import "server-only";
 import { isDemo } from "./config";
 import { readActivity } from "./activity";
 
-let cache: { at: number; ids: Set<string> } | null = null;
+type Paid = { galleries: Set<string>; links: Set<string> };
+let cache: { at: number; paid: Paid } | null = null;
 
-/** Galleries with a confirmed Stripe payment ("Paid" rows in the activity sheet). */
-export async function paidGalleries(): Promise<Set<string>> {
-  if (isDemo) return new Set();
-  if (cache && Date.now() - cache.at < 15_000) return cache.ids;
-  const rows = await readActivity();
-  const ids = new Set(rows.filter((r) => r.event === "Paid").map((r) => r.galleryId));
-  cache = { at: Date.now(), ids };
-  return ids;
+/**
+ * Confirmed payments ("Paid" rows in the activity sheet). A gallery whose request came from the
+ * dashboard is unlocked by a payment on that exact link, so sending a new request re-locks it.
+ */
+export async function paidGalleries(): Promise<Paid> {
+  if (isDemo) return { galleries: new Set(), links: new Set() };
+  if (cache && Date.now() - cache.at < 15_000) return cache.paid;
+  const rows = (await readActivity()).filter((r) => r.event === "Paid");
+  const paid: Paid = {
+    galleries: new Set(rows.map((r) => r.galleryId)),
+    links: new Set(rows.flatMap((r) => r.detail.match(/plink_[A-Za-z0-9]+/g) ?? [])),
+  };
+  cache = { at: Date.now(), paid };
+  return paid;
 }
 
 export function forgetPayments() {

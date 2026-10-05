@@ -558,3 +558,24 @@ select.move:hover { color: var(--text); }
 .logo-prev img { max-height: 56px; max-width: 100%; object-fit: contain; }
 .drop .drop-tip { font-size: 12px; opacity: .75; max-width: 46ch; text-align: center; }
 .hold-bar.paid { background: color-mix(in srgb, #3fae6b 18%, var(--bg)); }
+
+/* ---------- payments ---------- */
+.pay-status { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); }
+.pay-status .dot { width: 8px; height: 8px; border-radius: 50%; background: #d9a441; }
+.pay-status.ok .dot { background: #3fae6b; }
+.pay-amount { font-family: "Instrument Serif", serif; font-size: 40px; line-height: 1.1; margin-top: 10px; }
+.pay-label { color: var(--muted); font-size: 14px; }
+.field .money-input, .money-input { display: flex; margin: 0; align-items: center; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); padding-left: 14px; }
+.field .money-input b { color: var(--muted); font-weight: 500; }
+.field .money-input input { border: 0; background: transparent; box-shadow: none; padding-left: 6px; }
+.pay-list { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 6px; font-size: 14px; }
+.pay-list li { display: flex; gap: 10px; flex-wrap: wrap; }
+.pay-list span { color: var(--muted); }
+.pay-overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 14px; margin: 0 0 28px; }
+.pay-overview > div { border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; background: var(--surface); }
+.pay-overview ul { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 8px; }
+.pay-overview li { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; font-size: 14px; }
+.pay-overview li a { color: var(--text); text-decoration: none; font-weight: 500; }
+.pay-overview li a:hover { text-decoration: underline; }
+.pay-overview li span { color: var(--muted); font-size: 12.5px; flex-basis: 100%; }
+.pay-overview .hint { margin: 8px 0 0; }

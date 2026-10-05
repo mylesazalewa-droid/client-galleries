@@ -152,6 +152,7 @@ export function toGallery(g: GalleryRecord, asOwner = false): Gallery {
         : undefined,
     license: g.settings.license,
     payUrl: hold ? payLink(g) : undefined,
+    payDue: hold && g.settings.payAmount ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(g.settings.payAmount / 100) : undefined,
     clientLogo: g.clientLogoId ? `/api/client-logo/${g.slug}?v=${logoV}` : undefined,
   };
 }
@@ -314,9 +315,11 @@ async function loadFromDrive(force = false): Promise<GalleryRecord[]> {
 
   // Galleries paid through Stripe come off hold automatically.
   const { paidGalleries } = await import("./payments");
-  const paid = await paidGalleries().catch(() => new Set<string>());
+  const paid = await paidGalleries().catch(() => ({ galleries: new Set<string>(), links: new Set<string>() }));
   for (const r of records) {
-    if (paid.has(r.id)) {
+    if (!r.settings.hold) continue;
+    const linkId = r.settings.payLinkId;
+    if (linkId ? paid.links.has(linkId) : paid.galleries.has(r.id) && !!r.settings.payUrl) {
       r.paid = true;
       r.settings = { ...r.settings, hold: false };
     }

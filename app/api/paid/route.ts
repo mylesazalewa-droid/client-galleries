@@ -1,6 +1,7 @@
 import { logEvent } from "@/lib/activity";
 import { clearCache, getRecordById } from "@/lib/galleries";
 import { forgetPayments } from "@/lib/payments";
+import { money } from "@/lib/stripe";
 
 export const runtime = "nodejs";
 
@@ -31,8 +32,9 @@ export async function GET(req: Request) {
   }
 
   if (!g.paid) {
-    const amount = typeof session.amount_total === "number" ? `${(session.amount_total / 100).toFixed(2)} ${String(session.currency ?? "").toUpperCase()}` : "";
-    await logEvent(req, { galleryId: g.id, title: g.title, event: "Paid", detail: [amount, session.customer_details?.email].filter(Boolean).join(" · ") }, { includeOwner: true, wait: true });
+    const amount = typeof session.amount_total === "number" ? money(session.amount_total, session.currency ?? "usd") : "";
+    const link = typeof session.payment_link === "string" ? session.payment_link : "";
+    await logEvent(req, { galleryId: g.id, title: g.title, event: "Paid", detail: [amount, session.customer_details?.email, link].filter(Boolean).join(" · ") }, { includeOwner: true, wait: true });
   }
   forgetPayments();
   clearCache();

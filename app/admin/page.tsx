@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import AdminLogin from "@/components/admin/AdminLogin";
 import AdminShell from "@/components/admin/AdminShell";
-import Dashboard, { type DashGallery } from "@/components/admin/Dashboard";
+import Dashboard, { type DashGallery, type PaymentRow } from "@/components/admin/Dashboard";
+import { money } from "@/lib/stripe";
 import { isDemo, oauthReady, studio } from "@/lib/config";
 import { findActivitySheet, readActivity, summarize } from "@/lib/activity";
 import { isExpired, loadAll, resolveRoot } from "@/lib/galleries";
@@ -20,6 +21,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   let galleries: DashGallery[] = [];
   let loadError = "";
   let activityUrl: string | null = null;
+  let payments: PaymentRow[] = [];
   try {
     const [records, sheetId, rows] = await Promise.all([
       loadAll(true),
@@ -28,12 +30,17 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     ]);
     activityUrl = sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}/edit` : owner.demo ? "" : null;
     const stats = summarize(rows);
+    payments = rows
+      .filter((r) => r.event === "Paid" || r.event === "Marked paid")
+      .slice(0, 6)
+      .map(({ galleryId, gallery, event, detail, time }) => ({ galleryId, gallery, event, detail, time }));
     galleries = records.map((g) => {
       const photos = g.items.filter((i) => i.kind === "photo").length;
       const st = stats.get(g.id);
       return {
         expired: isExpired(g.settings),
         hold: !!g.settings.hold,
+        due: g.settings.hold && g.settings.payAmount ? money(g.settings.payAmount) : undefined,
         expires: g.settings.expires,
         views: st?.views ?? 0,
         downloads: st?.downloads ?? 0,
@@ -58,7 +65,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
   return (
     <AdminShell studio={studio} email={owner.email} demo={owner.demo}>
-      <Dashboard galleries={galleries} demo={owner.demo} loadError={loadError} rootMissing={rootMissing} activityUrl={activityUrl} />
+      <Dashboard galleries={galleries} demo={owner.demo} loadError={loadError} rootMissing={rootMissing} activityUrl={activityUrl} payments={payments} />
     </AdminShell>
   );
 }

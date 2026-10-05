@@ -39,11 +39,12 @@ async function api(url: string, init: RequestInit = {}) {
     .catch(() => ({ ok: false, error: "Couldn't connect. Try again." }));
 }
 
-export default function GalleryManager({ gallery, demo, activity }: { gallery: G; demo: boolean; activity: ActivityItem[] }) {
+export default function GalleryManager({ gallery, demo, activity, stripe }: { gallery: G; demo: boolean; activity: ActivityItem[]; stripe: boolean }) {
   const router = useRouter();
   const [g, setG] = useState(gallery);
   const [target, setTarget] = useState(""); // "" = main area, otherwise a section id
   const [toast, setToast] = useState("");
+  const [formKey, setFormKey] = useState(0); // remounts the settings form after payment changes
   const say = useCallback((t: string) => { setToast(t); setTimeout(() => setToast(""), 3200); }, []);
 
   const media = [...(g.cover && !g.items.some((i) => i.id === g.cover!.id) ? [g.cover] : []), ...g.items];
@@ -103,6 +104,19 @@ export default function GalleryManager({ gallery, demo, activity }: { gallery: G
     return true;
   }
 
+  async function markPaid() {
+    const res = await api(`/api/admin/galleries/${g.id}/payment`, { method: "PATCH", body: JSON.stringify({ action: "paid" }) });
+    if (!res.ok) { say(res.error || "Couldn't update"); return; }
+    paymentChanged(res.settings, "Marked as paid. Downloads are on.");
+  }
+
+  function paymentChanged(settings: GallerySettings, msg: string) {
+    setG((cur) => ({ ...cur, settings, paid: settings.hold ? false : cur.paid }));
+    setFormKey((k) => k + 1);
+    say(msg);
+    router.refresh();
+  }
+
   async function rename(item: MediaItem, name: string) {
     const res = await api(`/api/admin/files/${item.id}?g=${g.id}`, { method: "PATCH", body: JSON.stringify({ name }) });
     if (!res.ok) { say(res.error || "Couldn't rename"); return false; }
@@ -154,7 +168,7 @@ export default function GalleryManager({ gallery, demo, activity }: { gallery: G
           <h1 className="serif">{g.title}</h1>
         </div>
         <div className="mgr-share">
-          {g.settings.hold && <button className="btn" onClick={() => save({ hold: false }, "Marked as paid. Downloads are on.")}>Mark as paid</button>}
+          {g.settings.hold && <button className="btn" onClick={() => markPaid()}>Mark as paid</button>}
           <a className="btn" href={`${link}?as=client`} target="_blank" rel="noreferrer">View as client ↗</a>
           <CopyLink path={link} />
           <CopyLink text={invite} label="Copy invite" className="btn primary" />
@@ -216,7 +230,8 @@ export default function GalleryManager({ gallery, demo, activity }: { gallery: G
         </div>
 
         <aside className="mgr-side">
-          <Settings g={g} onSave={save} />
+          <Payment g={g} stripe={stripe} demo={demo} say={say} onChange={paymentChanged} onMarkPaid={markPaid} onSave={save} />
+          <Settings key={formKey} g={g} onSave={save} />
           <ClientLogo g={g} demo={demo} say={say} onChange={(clientLogo) => setG((cur) => ({ ...cur, clientLogo }))} />
           <Activity items={activity} />
           <Danger g={g} demo={demo} say={say} onDeleted={() => { router.push("/admin"); router.refresh(); }} />
@@ -441,7 +456,6 @@ function Settings({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings> & 
     picks: !!g.settings.picks,
     share: g.settings.share !== false,
     license: g.settings.license ?? "",
-    payUrl: g.settings.payUrl ?? "",
   });
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -473,12 +487,6 @@ function Settings({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings> & 
       <label className="check"><input type="checkbox" checked={f.picks} onChange={set("picks")} /> Let clients heart favorites and send picks</label>
       <label className="check"><input type="checkbox" checked={f.share} onChange={set("share")} /> Let clients share single films and embed them on their website</label>
       <label className="check"><input type="checkbox" checked={f.hidden} onChange={set("hidden")} /> Draft (hide from client)</label>
-      {f.hold && (
-        <label className="field"><span>Stripe payment link</span>
-          <input value={f.payUrl} onChange={set("payUrl")} placeholder="https://buy.stripe.com/…" inputMode="url" />
-          <small className="hint">Clients see a “Pay invoice” button. Once Stripe confirms payment, downloads unlock on their own.</small>
-        </label>
-      )}
       <div className="field"><span>Usage rights</span>
         <div className="presets">
           {LICENSES.map((l) => (
@@ -491,6 +499,124 @@ function Settings({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings> & 
       <p className="hint">Renaming changes the link. Changing the password signs out anyone using the old one. After the closing date, clients see a “gallery closed” page.</p>
       <button className="btn primary" disabled={busy} style={{ width: "100%", justifyContent: "center" }}>{busy ? "Saving…" : "Save changes"}</button>
     </form>
+  );
+}
+
+// ------------------------------------------------------------------ payment
+
+type Pay = { id: string; label: string; email?: string; created: number };
+
+function Payment({ g, stripe, demo, say, onChange, onMarkPaid, onSave }: {
+  g: G; stripe: boolean; demo: boolean; say: (t: string) => void;
+  onChange: (s: GallerySettings, msg: string) => void; onMarkPaid: () => void;
+  onSave: (p: Partial<GallerySettings>, msg?: string) => Promise<boolean>;
+}) {
+  const s = g.settings;
+  const [amount, setAmount] = useState("");
+  const [label, setLabel] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [payments, setPayments] = useState<Pay[] | null>(null);
+  const [manual, setManual] = useState(s.payUrl && !s.payLinkId ? s.payUrl : "");
+  const [copied, setCopied] = useState(false);
+  const open = !!s.payLinkId && !!s.hold;
+  const paid = !!s.payLinkId && !s.hold;
+
+  useEffect(() => {
+    if (!stripe || !s.payLinkId) return setPayments(null);
+    api(`/api/admin/galleries/${g.id}/payment`).then((r) => setPayments(r.ok ? r.payments : []));
+  }, [g.id, s.payLinkId, s.hold, stripe]);
+
+  async function create(e: React.FormEvent) {
+    e.preventDefault();
+    if (demo) return say("Demo mode — connect Google to request payments.");
+    setBusy(true);
+    const res = await api(`/api/admin/galleries/${g.id}/payment`, { method: "POST", body: JSON.stringify({ amount, label }) });
+    setBusy(false);
+    if (!res.ok) return say(res.error || "Couldn't create the payment");
+    setEditing(false); setAmount(""); setLabel("");
+    onChange(res.settings, "Payment request created. The gallery is on hold until it's paid.");
+  }
+
+  async function cancel() {
+    setBusy(true);
+    const res = await api(`/api/admin/galleries/${g.id}/payment`, { method: "DELETE" });
+    setBusy(false);
+    if (!res.ok) return say(res.error || "Couldn't cancel");
+    onChange(res.settings, "Payment request canceled. The old link no longer works.");
+  }
+
+  async function copy() {
+    try { await navigator.clipboard.writeText(s.payUrl ?? ""); } catch {}
+    setCopied(true); setTimeout(() => setCopied(false), 1500);
+  }
+
+  const amountLabel = s.payAmount ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(s.payAmount / 100) : "";
+
+  if (!stripe) {
+    return (
+      <div className="panel">
+        <h3>Payment</h3>
+        <p className="hint" style={{ marginTop: 0 }}>Connect Stripe to create payment requests here: add <code>STRIPE_SECRET_KEY</code> in Vercel. Until then you can paste a Stripe payment link.</p>
+        <label className="field"><span>Payment link</span><input value={manual} onChange={(e) => setManual(e.target.value)} placeholder="https://buy.stripe.com/…" /></label>
+        <button className="btn" disabled={busy} onClick={async () => { setBusy(true); await onSave({ payUrl: manual.trim() }, manual.trim() ? "Payment link saved" : "Payment link removed"); setBusy(false); }}>Save link</button>
+      </div>
+    );
+  }
+
+  const form = (
+    <form onSubmit={create} className="pay-form">
+      <label className="field"><span>Amount (USD)</span>
+        <span className="money-input"><b>$</b><input required inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="2,500" /></span>
+      </label>
+      <label className="field"><span>What it&apos;s for</span><input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={`${g.title} — final payment`} /></label>
+      <p className="hint" style={{ marginTop: 0 }}>Clients see watermarked previews and a “Pay {amount ? `$${amount.replace(/^\$/, "")}` : "invoice"}” button. Downloads unlock automatically once Stripe confirms payment.</p>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button className="btn primary" disabled={busy}>{busy ? "Creating…" : open ? "Replace request" : "Request payment"}</button>
+        {editing && <button type="button" className="btn" onClick={() => setEditing(false)}>Cancel</button>}
+      </div>
+    </form>
+  );
+
+  return (
+    <div className="panel pay-panel">
+      <h3>Payment</h3>
+      {open && !editing && (
+        <>
+          <div className="pay-status wait"><span className="dot" /> Waiting for payment</div>
+          <div className="pay-amount">{amountLabel}</div>
+          {s.payLabel && <div className="pay-label">{s.payLabel}</div>}
+          <div className="copy-row" style={{ margin: "12px 0" }}>
+            <input readOnly value={s.payUrl ?? ""} onFocus={(e) => e.target.select()} />
+            <button type="button" className="btn" onClick={copy}>{copied ? "Copied" : "Copy"}</button>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button type="button" className="btn" disabled={busy} onClick={onMarkPaid}>Mark as paid</button>
+            <button type="button" className="btn" disabled={busy} onClick={() => setEditing(true)}>Change amount</button>
+            <button type="button" className="link-btn" disabled={busy} onClick={cancel}>Cancel request</button>
+          </div>
+          <p className="hint">Paid by check or another way? “Mark as paid” unlocks the gallery and turns off the Stripe link.</p>
+        </>
+      )}
+      {paid && !editing && (
+        <>
+          <div className="pay-status ok"><span className="dot" /> Paid{amountLabel ? ` · ${amountLabel}` : ""}</div>
+          {s.payLabel && <div className="pay-label">{s.payLabel}</div>}
+          {payments?.length ? (
+            <ul className="pay-list">
+              {payments.map((p) => (
+                <li key={p.id}><b>{p.label}</b> {p.email && <span>{p.email}</span>} <span>{new Date(p.created * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span></li>
+              ))}
+            </ul>
+          ) : payments ? <p className="hint">Marked as paid by you.</p> : null}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+            <button type="button" className="btn" onClick={() => setEditing(true)}>New payment request</button>
+            <button type="button" className="link-btn" disabled={busy} onClick={cancel}>Clear</button>
+          </div>
+        </>
+      )}
+      {(!s.payLinkId || editing) && form}
+    </div>
   );
 }
 

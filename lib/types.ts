@@ -55,6 +55,11 @@ export type GallerySettings = {
   license?: string;
   /** Stripe Payment Link that unlocks a payment hold */
   payUrl?: string;
+  /** Stripe Payment Link created from the dashboard */
+  payLinkId?: string;
+  /** amount in cents and what it's for (shown to the client) */
+  payAmount?: number;
+  payLabel?: string;
 };
 
 export type GallerySummary = {
@@ -83,6 +88,8 @@ export type Gallery = GallerySummary & {
   license?: string;
   /** link to pay, while on hold */
   payUrl?: string;
+  /** e.g. "$2,500.00" */
+  payDue?: string;
   /** URL of the client's logo for "Prepared for" */
   clientLogo?: string;
 };

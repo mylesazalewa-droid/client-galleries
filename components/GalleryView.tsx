@@ -221,7 +221,7 @@ export default function GalleryView({ gallery, studio, owner, justPaid }: Props)
         <div className="hold-bar">
           <Lock />
           <span><b>Preview only.</b> Full-resolution downloads unlock once the project is paid.</span>
-          {gallery.payUrl && <a className="btn primary pay-btn" href={gallery.payUrl}>Pay invoice</a>}
+          {gallery.payUrl && <a className="btn primary pay-btn" href={gallery.payUrl}>{gallery.payDue ? `Pay ${gallery.payDue}` : "Pay invoice"}</a>}
         </div>
       )}
 

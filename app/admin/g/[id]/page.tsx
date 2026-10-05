@@ -6,6 +6,7 @@ import { studio } from "@/lib/config";
 import { readActivity } from "@/lib/activity";
 import { getRecordById, isExpired } from "@/lib/galleries";
 import { currentOwner } from "@/lib/owner";
+import { stripeReady } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Edit gallery" };
@@ -24,6 +25,7 @@ export default async function ManagePage({ params }: { params: Promise<{ id: str
     <AdminShell studio={studio} email={owner.email} demo={owner.demo} back>
       <GalleryManager
         demo={owner.demo}
+        stripe={stripeReady()}
         activity={activity}
         gallery={{
           id: g.id,
