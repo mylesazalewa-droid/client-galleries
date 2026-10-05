@@ -9,6 +9,9 @@ A branded, mobile-first client gallery for photos **and** video. You drop files 
 - Per-gallery password, per-file download, and "Download all" as a .zip (everything / photos / films)
 - Files stay private in Drive — nothing needs to be shared publicly
 
+- **Owner dashboard at `/admin`**: sign in with Google, create galleries, drag in photos and films (they upload straight into your Drive), set passwords, pick the cover, copy the client invite
+- Every gallery link ends in a private code (e.g. `/g/lakeshore-brand-film-3fa9c2`), so clients can only reach their own gallery
+
 It runs in **demo mode** with sample media until you add Google credentials, so you can try it first.
 
 ```bash
@@ -21,8 +24,8 @@ npm run dev        # http://localhost:3000
 ## How Drive maps to the site
 
 ```
-Client Galleries/                     ← DRIVE_ROOT_FOLDER_ID
-├── Lakeshore CU — Brand Film/        → yoursite.com/g/lakeshore-cu-brand-film
+CLIENTS/                              ← created by the dashboard; nothing outside it is touched
+├── Lakeshore CU — Brand Film/        → yoursite.com/g/lakeshore-cu-brand-film-3fa9c2
 │   ├── gallery.json                  (optional settings)
 │   ├── cover.jpg                     (optional hero image, hidden from grid)
 │   ├── 01 Hero cut.mp4
@@ -32,7 +35,8 @@ Client Galleries/                     ← DRIVE_ROOT_FOLDER_ID
 └── _Work in progress/                ← folders starting with _ stay hidden
 ```
 
-- **Folder name = gallery title**, and its URL slug is made from the name. Renaming the folder changes the link.
+- **Folder name = gallery title**. The link is the name plus a private code, so renaming changes the link.
+- Use the dashboard to create galleries and upload. The app signs in with the `drive.file` permission, so it can only see and change the folders and files it created — never the rest of your Drive.
 - Files are sorted by name (natural order), so prefix with numbers to control order.
 - Files starting with `_` or `.` are skipped.
 - No `cover.*` file? The first photo is used.
@@ -64,10 +68,13 @@ Changing the password signs out anyone who unlocked the old one.
 4. Open it → **Keys → Add key → JSON**. A `.json` file downloads. Keep it private.
 5. Copy the service account's email (looks like `galleries@your-project.iam.gserviceaccount.com`).
 
-### 2. Drive folder
-1. Create a folder, e.g. **Client Galleries**.
-2. **Share** it with the service account email as **Viewer**.
-3. Copy the folder ID from the URL: `drive.google.com/drive/folders/`**`THIS_PART`**.
+### 2. Owner sign-in (OAuth client)
+1. **APIs & Services → OAuth consent screen**: User type **External**, app name e.g. "Client Galleries", your email as support + developer contact. Add yourself as a test user, then click **Publish app** (drive.file is a non-sensitive scope, so no Google review is needed).
+2. **APIs & Services → Credentials → Create credentials → OAuth client ID → Web application.**
+3. Authorized redirect URI: `https://client-galleries.vercel.app/api/auth/callback` (and `http://localhost:3000/api/auth/callback` for local testing).
+4. Copy the **Client ID** and **Client secret**.
+
+The **CLIENTS** folder is created and shared with the service account automatically the first time you make a gallery in the dashboard.
 
 ### 3. Selections sheet
 1. Create a Google Sheet. Put these headers in row 1:
@@ -82,7 +89,8 @@ Copy `.env.example` to `.env.local` and fill in:
 | Variable | Value |
 |---|---|
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Entire contents of the JSON key (or base64 of it) |
-| `DRIVE_ROOT_FOLDER_ID` | Folder ID from step 2 |
+| `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` | From step 2 |
+| `OWNER_EMAILS` | Your Google account, e.g. `mylesazalewa@gmail.com` |
 | `SELECTIONS_SHEET_ID` | Sheet ID from step 3 |
 | `GALLERY_SECRET` | Any long random string |
 | `STUDIO_NAME`, `STUDIO_TAGLINE`, `STUDIO_URL`, `STUDIO_EMAIL` | Your branding |
@@ -114,6 +122,9 @@ app/api/download/[id]       single-file download
 app/api/zip/[slug]          zip of the whole gallery
 app/api/unlock              password check → signed cookie
 app/api/selections          client picks → Google Sheet (+ email)
+app/admin                   owner dashboard (gallery list + gallery manager)
+app/api/auth/*              Google sign-in for the owner
+app/api/admin/*             create/edit/delete galleries, start uploads, remove files
 components/GalleryView.tsx  hero, filters, grid, selection bar, send dialog
 components/Lightbox.tsx     viewer with gestures, notes, downloads
 lib/galleries.ts            reads folders/files from Drive (and demo data)

@@ -1,5 +1,6 @@
 import "server-only";
-import { cacheTtl, isDemo, rootFolderId } from "./config";
+import { createHash } from "crypto";
+import { cacheTtl, isDemo, rootFolderIdEnv, rootFolderName } from "./config";
 import { demoGalleries } from "./demo";
 import { drive } from "./google";
 import type { Gallery, GallerySettings, GallerySummary, MediaItem } from "./types";
@@ -14,9 +15,12 @@ export type GalleryRecord = {
   settings: GallerySettings;
   items: MediaItem[];
   cover?: MediaItem;
+  /** Drafts: folder name starts with "_" or gallery.json has "hidden": true. Only the owner sees them. */
+  hidden?: boolean;
+  settingsFileId?: string;
 };
 
-const SETTINGS_FILE = "gallery.json";
+export const SETTINGS_FILE = "gallery.json";
 const IMAGE = /^image\/(jpeg|png|webp|heic|heif|gif|tiff)$/;
 const VIDEO = /^video\//;
 
@@ -28,6 +32,15 @@ export function slugify(s: string) {
     .replace(/&/g, " and ")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+/** Each link gets a short code derived from the Drive folder ID, so clients can't guess other galleries. */
+export function linkCode(folderId: string) {
+  return createHash("sha256").update(folderId).digest("hex").slice(0, 6);
+}
+
+export function slugFor(title: string, folderId: string) {
+  return `${slugify(title).slice(0, 60) || "gallery"}-${linkCode(folderId)}`;
 }
 
 // ---------------------------------------------------------------- caching
@@ -42,14 +55,27 @@ export function loadAll(force = false): Promise<GalleryRecord[]> {
   return data;
 }
 
+export function clearCache() {
+  cache = null;
+  rootCache = null;
+}
+
+/** Public lookup by link. Drafts are only reachable from the dashboard. */
 export async function getRecord(slug: string) {
   const all = await loadAll();
-  return all.find((g) => g.slug === slug) ?? null;
+  return all.find((g) => g.slug === slug && !g.hidden) ?? null;
+}
+
+/** Dashboard lookup by Drive folder ID (includes drafts). */
+export async function getRecordById(id: string, force = false) {
+  const all = await loadAll(force);
+  return all.find((g) => g.id === id) ?? null;
 }
 
 /** Look up a file only within the given gallery, so file IDs can't reach anything else in Drive. */
 export async function findItem(slug: string, id: string) {
-  const g = await getRecord(slug);
+  // Includes drafts so the dashboard can show their thumbnails; the link code + file ID are both unguessable.
+  const g = (await loadAll()).find((r) => r.slug === slug);
   if (!g) return null;
   const item = g.items.find((i) => i.id === id) ?? (g.cover?.id === id ? g.cover : undefined);
   return item ? { gallery: g, item } : null;
@@ -153,17 +179,32 @@ function toItem(f: DriveFile, slug: string): MediaItem | null {
   return null;
 }
 
+let rootCache: { at: number; id: string | null } | null = null;
+
+/** The parent "Client Galleries" folder: from DRIVE_ROOT_FOLDER_ID, or found by name among folders shared with the service account. */
+export async function resolveRoot(force = false): Promise<string | null> {
+  if (rootFolderIdEnv) return rootFolderIdEnv;
+  if (!force && rootCache && Date.now() - rootCache.at < 10 * 60_000) return rootCache.id;
+  const name = rootFolderName.replace(/'/g, "\\'");
+  const found = await listChildren(`name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const id = found[0]?.id ?? null;
+  rootCache = { at: Date.now(), id };
+  return id;
+}
+
 async function loadFromDrive(): Promise<GalleryRecord[]> {
+  const root = await resolveRoot();
+  if (!root) return [];
   const folders = await listChildren(
-    `'${rootFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    `'${root}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
   );
 
   const records = await Promise.all(
     folders
-      // Folders starting with "_" are drafts and stay hidden.
-      .filter((f) => f.id && f.name && !f.name.startsWith("_"))
+      .filter((f) => f.id && f.name)
       .map(async (folder): Promise<GalleryRecord> => {
-        const slug = slugify(folder.name!);
+        const title = folder.name!.replace(/^_+\s*/, "");
+        const slug = slugFor(title, folder.id!);
         const files = await listChildren(`'${folder.id}' in parents and trashed=false`);
         const settingsFile = files.find((f) => f.name === SETTINGS_FILE);
         const settings = settingsFile?.id ? await readSettings(settingsFile.id) : {};
@@ -181,7 +222,8 @@ async function loadFromDrive(): Promise<GalleryRecord[]> {
         const cover = media.find(isCover);
         const items = settings.cover ? media : media.filter((i) => i !== cover);
 
-        return { id: folder.id!, slug, title: folder.name!, settings, items, cover };
+        const hidden = folder.name!.startsWith("_") || settings.hidden === true;
+        return { id: folder.id!, slug, title, settings, items, cover, hidden, settingsFileId: settingsFile?.id ?? undefined };
       }),
   );
 

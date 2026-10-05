@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import { cookieSecret } from "./config";
 import type { GalleryRecord } from "./galleries";
+import { readSession } from "./owner";
 
 export const cookieName = (slug: string) => `gal_${slug}`;
 
@@ -19,6 +20,7 @@ export function passwordMatches(g: GalleryRecord, attempt: string) {
 
 export async function canView(g: GalleryRecord) {
   if (!g.settings.password) return true;
+  if (await readSession()) return true; // the owner sees everything
   const jar = await cookies();
   const value = jar.get(cookieName(g.slug))?.value;
   if (!value) return false;

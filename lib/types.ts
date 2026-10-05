@@ -26,6 +26,8 @@ export type GallerySettings = {
   cover?: string;
   /** optional intro line under the title */
   message?: string;
+  /** draft: only visible in the dashboard */
+  hidden?: boolean;
 };
 
 export type GallerySummary = {

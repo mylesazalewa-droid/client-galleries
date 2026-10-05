@@ -8,7 +8,8 @@ import { loadAll, toSummary } from "@/lib/galleries";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const galleries = showIndex ? (await loadAll()).map(toSummary) : [];
+  const listed = showIndex || isDemo;
+  const galleries = listed ? (await loadAll()).filter((g) => !g.hidden).map(toSummary) : [];
 
   return (
     <main className="home">
@@ -22,7 +23,7 @@ export default async function Home() {
         <h1 className="serif">Client <em>galleries</em></h1>
       </section>
 
-      {showIndex ? (
+      {listed ? (
         <div className="cards">
           {galleries.map((g) => (
             <Link key={g.slug} href={`/g/${g.slug}`} className="card">
@@ -43,9 +44,8 @@ export default async function Home() {
 
       {isDemo && (
         <div className="notice">
-          <b>Demo mode.</b> These galleries use bundled sample media. Add <code>GOOGLE_SERVICE_ACCOUNT_JSON</code> and{" "}
-          <code>DRIVE_ROOT_FOLDER_ID</code> to switch to your Google Drive folders. The second gallery&apos;s password is{" "}
-          <code>demo</code>.
+          <b>Demo mode.</b> These galleries use sample media until Google Drive is connected. The second gallery&apos;s password is <code>demo</code>.{" "}
+          <a href="/admin">Owner dashboard →</a>
         </div>
       )}
     </main>
