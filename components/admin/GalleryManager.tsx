@@ -490,7 +490,7 @@ function Settings({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings> & 
       <label className="check"><input type="checkbox" checked={f.downloads} onChange={set("downloads")} /> Allow downloads</label>
       <label className="check"><input type="checkbox" checked={f.hold} onChange={set("hold")} /> Hold downloads until paid (watermarked previews)</label>
       <label className="check"><input type="checkbox" checked={f.picks} onChange={set("picks")} /> Let clients heart favorites and send picks</label>
-      <label className="check"><input type="checkbox" checked={f.share} onChange={set("share")} /> Let clients share single films and embed them on their website</label>
+      <label className="check"><input type="checkbox" checked={f.share} onChange={set("share")} /> Let clients share a link to a single film</label>
       <label className="check"><input type="checkbox" checked={f.hidden} onChange={set("hidden")} /> Draft (hide from client)</label>
       <div className="field"><span>Usage rights</span>
         <div className="presets">

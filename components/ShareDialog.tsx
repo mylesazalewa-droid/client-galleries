@@ -2,9 +2,9 @@
 import { useEffect, useState } from "react";
 import { Check, Close } from "./icons";
 
-/** Link to one film, plus an embed code for the client's website. */
-export default function ShareDialog({ title, path, embedPath, downloadKey, onClose }: {
-  title: string; path: string; embedPath: string; downloadKey?: string; onClose: () => void;
+/** A private link to one film (view only, or with downloads). */
+export default function ShareDialog({ title, path, downloadKey, onClose }: {
+  title: string; path: string; downloadKey?: string; onClose: () => void;
 }) {
   const [allowDl, setAllowDl] = useState(false);
   const [origin, setOrigin] = useState("");
@@ -17,7 +17,6 @@ export default function ShareDialog({ title, path, embedPath, downloadKey, onClo
   }, [onClose]);
 
   const link = `${origin}${path}${allowDl && downloadKey ? `${path.includes("?") ? "&" : "?"}d=${downloadKey}` : ""}`;
-  const embed = `<iframe src="${origin}${embedPath}" title="${title.replace(/"/g, "&quot;")}" style="width:100%;aspect-ratio:16/9;border:0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`;
 
   async function copy(what: string, text: string) {
     try { await navigator.clipboard.writeText(text); } catch {}
@@ -52,12 +51,6 @@ export default function ShareDialog({ title, path, embedPath, downloadKey, onClo
             <button className="btn primary" onClick={() => copy("link", link)}>{copied === "link" ? <><Check /> Copied</> : "Copy"}</button>
           </div>
         </label>
-        <label className="field"><span>Embed on a website (always view only)</span>
-          <textarea readOnly value={embed} rows={4} onFocus={(e) => e.target.select()} className="code-box" />
-        </label>
-        <div className="actions">
-          <button className="btn" onClick={() => copy("embed", embed)}>{copied === "embed" ? <><Check /> Copied</> : "Copy embed code"}</button>
-        </div>
       </div>
     </div>
   );

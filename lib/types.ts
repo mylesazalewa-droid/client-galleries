@@ -49,7 +49,7 @@ export type GallerySettings = {
   hold?: boolean;
   /** let clients heart favorites and send picks */
   picks?: boolean;
-  /** let clients share single films and embed them on their website (default on) */
+  /** let clients share a link to a single film (default on) */
   share?: boolean;
   /** usage rights / licensing note shown to the client */
   license?: string;

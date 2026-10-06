@@ -271,7 +271,7 @@ export default function Lightbox({ items, index, onIndex, onClose, favs, onToggl
           </>
         )}
         {shareSlug && item.kind === "video" && (
-          <button className="icon-btn" onClick={() => setSharing(true)} aria-label="Share or embed this film" title="Share / embed"><Share /></button>
+          <button className="icon-btn" onClick={() => setSharing(true)} aria-label="Share this film" title="Share"><Share /></button>
         )}
         {allowDownload && <DownloadMenu item={item} />}
         <button className="icon-btn" onClick={onClose} aria-label="Close" title="Close (Esc)"><Close /></button>
@@ -330,7 +330,6 @@ export default function Lightbox({ items, index, onIndex, onClose, favs, onToggl
         <ShareDialog
           title={item.title ?? item.name}
           path={`/f/${shareSlug}/${encodeURIComponent(item.id)}${shareKeys?.[item.id] ? `?k=${shareKeys[item.id].k}` : ""}`}
-          embedPath={`/embed/${shareSlug}/${encodeURIComponent(item.id)}${shareKeys?.[item.id] ? `?k=${shareKeys[item.id].k}` : ""}`}
           downloadKey={allowDownload ? shareKeys?.[item.id]?.d : undefined}
           onClose={() => setSharing(false)}
         />
