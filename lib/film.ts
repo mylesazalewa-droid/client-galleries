@@ -29,7 +29,8 @@ export async function loadFilm(slug: string, id: string, key: string | null, dow
     if (!allowed) return { ok: false, g, reason: "private" };
   }
   // A shared link offers downloads only when the sender turned "Allow downloads" on.
-  const canDownload = owner || (g.settings.downloads !== false && !g.settings.hold && dlLink);
+  // Even when you're signed in, the page shows exactly what the link allows, so you can check it before sending.
+  const canDownload = g.settings.downloads !== false && !g.settings.hold && dlLink;
   return {
     ok: true,
     g,
