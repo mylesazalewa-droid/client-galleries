@@ -22,6 +22,7 @@ export default function BrandEditor({ brand, studio, demo }: { brand: Brand; stu
   });
   const [logo, setLogo] = useState(studio.logo);
   const [landing, setLanding] = useState(studio.landing);
+  const [mark, setMark] = useState(studio.watermark);
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState("");
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
@@ -37,7 +38,7 @@ export default function BrandEditor({ brand, studio, demo }: { brand: Brand; stu
     else say(res.error || "Couldn't save");
   }
 
-  async function upload(kind: "logo" | "landing", file: File) {
+  async function upload(kind: "logo" | "landing" | "watermark", file: File) {
     if (demo) return say("Demo mode — connect Google to upload.");
     setBusy(kind);
     const start = await api("/api/admin/brand", { method: "POST", body: JSON.stringify({ kind, name: file.name, type: file.type, size: file.size }) });
@@ -54,22 +55,24 @@ export default function BrandEditor({ brand, studio, demo }: { brand: Brand; stu
     const isVideo = file.type.startsWith("video/");
     const res = await api("/api/admin/brand", {
       method: "PATCH",
-      body: JSON.stringify(kind === "logo" ? { logoId: id } : { landingId: id, landingKind: isVideo ? "video" : "photo" }),
+      body: JSON.stringify(kind === "logo" ? { logoId: id } : kind === "watermark" ? { watermarkId: id } : { landingId: id, landingKind: isVideo ? "video" : "photo" }),
     });
     setBusy("");
     if (!res.ok) return say(res.error || "Couldn't save");
     const local = URL.createObjectURL(file);
     if (kind === "logo") setLogo(local);
+    else if (kind === "watermark") setMark(local);
     else setLanding({ kind: isVideo ? "video" : "photo", src: local });
-    say(kind === "logo" ? "Logo updated." : "Landing background updated.");
+    say(kind === "logo" ? "Logo updated." : kind === "watermark" ? "Watermark updated." : "Landing background updated.");
     router.refresh();
   }
 
-  async function remove(kind: "logo" | "landing") {
+  async function remove(kind: "logo" | "landing" | "watermark") {
     if (demo) return;
-    const res = await api("/api/admin/brand", { method: "PATCH", body: JSON.stringify(kind === "logo" ? { logoId: null } : { landingId: null }) });
+    const res = await api("/api/admin/brand", { method: "PATCH", body: JSON.stringify(kind === "logo" ? { logoId: null } : kind === "watermark" ? { watermarkId: null } : { landingId: null }) });
     if (!res.ok) return say(res.error || "Couldn't remove");
     if (kind === "logo") setLogo(undefined);
+    else if (kind === "watermark") setMark("/watermark.png");
     else setLanding(undefined);
     router.refresh();
   }
@@ -121,6 +124,16 @@ export default function BrandEditor({ brand, studio, demo }: { brand: Brand; stu
             onRemove={logo ? () => remove("logo") : undefined}
           >
             {logo ? <div className="logo-prev"><img src={logo} alt="Logo" /></div> : <div className="slot-empty">No logo — your studio name is shown instead</div>}
+          </MediaSlot>
+          <MediaSlot
+            title="Watermark"
+            hint="Tiled over previews while a gallery is held for payment. A white mark on a transparent PNG works best."
+            accept="image/png,image/webp"
+            busy={busy === "watermark"}
+            onPick={(file) => upload("watermark", file)}
+            onRemove={mark && mark !== "/watermark.png" ? () => remove("watermark") : undefined}
+          >
+            <div className="wm-prev"><span className="wm-img" style={{ backgroundImage: `url("${mark}")` }} /></div>
           </MediaSlot>
           <MediaSlot
             title="Landing background"

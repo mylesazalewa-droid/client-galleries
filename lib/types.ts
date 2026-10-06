@@ -103,6 +103,8 @@ export type Studio = {
   accent?: string;
   /** URL of the uploaded logo, if any */
   logo?: string;
+  /** image tiled over previews while a payment hold is on */
+  watermark?: string;
   /** URL + kind of the landing page background, if any */
   landing?: { src: string; poster?: string; kind: MediaKind };
 };

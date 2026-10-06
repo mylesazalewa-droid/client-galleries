@@ -255,7 +255,7 @@ export default function GalleryView({ gallery, studio, owner, justPaid }: Props)
                     delay={Math.min(tileIndex++, 14) * 35}
                     fav={favs[item.id]}
                     picks={picksOn}
-                    watermark={gallery.hold ? studio.name : undefined}
+                    watermark={gallery.hold ? studio.watermark ?? studio.name : undefined}
                     onOpen={() => openItem(item)}
                     onFav={() => toggleFav(item.id)}
                     canDownload={gallery.allowDownload}
@@ -307,7 +307,7 @@ export default function GalleryView({ gallery, studio, owner, justPaid }: Props)
           onNote={setNote}
           allowDownload={gallery.allowDownload}
           picks={picksOn}
-          watermark={gallery.hold ? studio.name : undefined}
+          watermark={gallery.hold ? studio.watermark ?? studio.name : undefined}
           shareSlug={gallery.share ? gallery.slug : undefined}
           shareKeys={gallery.shareKeys}
         />

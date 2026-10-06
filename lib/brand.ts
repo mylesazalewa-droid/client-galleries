@@ -13,6 +13,7 @@ export type Brand = {
   website?: string;
   accent?: string;
   logoId?: string;
+  watermarkId?: string;
   landingId?: string;
   landingKind?: MediaKind;
 };
@@ -65,6 +66,7 @@ export async function getStudio(): Promise<Studio> {
     email: brand.email || envStudio.email,
     accent: brand.accent || undefined,
     logo: brand.logoId ? `/api/brand/logo?v=${v(brand.logoId)}` : undefined,
+    watermark: brand.watermarkId ? `/api/brand/watermark?v=${v(brand.watermarkId)}` : "/watermark.png",
     landing: brand.landingId
       ? brand.landingKind === "video"
         ? { kind: "video", src: `/api/brand/landing?stream=1&v=${v(brand.landingId)}`, poster: `/api/brand/landing?v=${v(brand.landingId)}` }

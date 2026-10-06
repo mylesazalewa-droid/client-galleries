@@ -15,6 +15,7 @@ export const PATCH = adminRoute(async (req: Request) => {
   if (next.accent && !/^#[0-9a-f]{6}$/i.test(next.accent)) return Response.json({ ok: false, error: "Accent must be a color like #c98a4b" }, { status: 400 });
   if (next.website && !/^https?:\/\//i.test(next.website)) next.website = `https://${next.website}`;
   if ("logoId" in body) next.logoId = body.logoId || undefined;
+  if ("watermarkId" in body) next.watermarkId = body.watermarkId || undefined;
   if ("landingId" in body) {
     next.landingId = body.landingId || undefined;
     next.landingKind = body.landingId ? (body.landingKind === "video" ? "video" : "photo") : undefined;
@@ -29,9 +30,9 @@ export const PATCH = adminRoute(async (req: Request) => {
 export const POST = adminRoute(async (req: Request) => {
   const body = await req.json().catch(() => ({}));
   const type = String(body.type ?? "");
-  const kind = body.kind === "landing" ? "landing" : "logo";
-  if (!(kind === "logo" ? /^image\// : /^(image|video)\//).test(type)) {
-    return Response.json({ ok: false, error: kind === "logo" ? "The logo needs to be an image (PNG works best)." : "Use a photo or a video." }, { status: 400 });
+  const kind = body.kind === "landing" ? "landing" : body.kind === "watermark" ? "watermark" : "logo";
+  if (!(kind === "landing" ? /^(image|video)\// : /^image\//).test(type)) {
+    return Response.json({ ok: false, error: kind === "landing" ? "Use a photo or a video." : "This needs to be an image (a PNG with a transparent background works best)." }, { status: 400 });
   }
   const { token } = await ownerToken();
   const { folderId } = await loadBrand(true);

@@ -579,3 +579,9 @@ select.move:hover { color: var(--text); }
 .pay-overview li a:hover { text-decoration: underline; }
 .pay-overview li span { color: var(--muted); font-size: 12.5px; flex-basis: 100%; }
 .pay-overview .hint { margin: 8px 0 0; }
+
+/* image watermark (tiled logo) */
+.wm-img { position: absolute; inset: -40%; z-index: 1; pointer-events: none; user-select: none; background-repeat: repeat; background-size: 120px auto; background-position: center; opacity: .32; transform: rotate(-18deg); filter: drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
+.wm-img.big { inset: -60%; z-index: 2; background-size: clamp(150px, 16vw, 230px) auto; opacity: .28; }
+.wm-prev { position: relative; height: 150px; border-radius: 12px; overflow: hidden; background: linear-gradient(135deg, #5a6b7d, #2a3340 60%, #b08a5c); }
+.wm-prev .wm-img { opacity: .45; }
