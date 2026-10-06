@@ -60,7 +60,18 @@ export type GallerySettings = {
   /** amount in cents and what it's for (shown to the client) */
   payAmount?: number;
   payLabel?: string;
+  /** a payment request split into parts (deposit + final); unlocks when every part is paid */
+  payParts?: PayPart[];
+  /** when the current payment request was sent (ISO), for reminders */
+  payRequestedAt?: string;
+  /** client's email address(es), comma separated */
+  clientEmail?: string;
+  /** automatic email reminders */
+  remindUnpaid?: boolean;
+  remindClosing?: boolean;
 };
+
+export type PayPart = { id: string; url: string; amount: number; label: string };
 
 export type GallerySummary = {
   id: string;
@@ -90,6 +101,10 @@ export type Gallery = GallerySummary & {
   payUrl?: string;
   /** e.g. "$2,500.00" */
   payDue?: string;
+  /** label of the part due now ("Final payment"), when split */
+  payDueLabel?: string;
+  /** every part with its status, when the request is split */
+  payParts?: { label: string; amount: string; paid: boolean }[];
   /** URL of the client's logo for "Prepared for" */
   clientLogo?: string;
 };

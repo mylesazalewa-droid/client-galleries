@@ -63,7 +63,7 @@ export default async function GalleryPage({ params, searchParams }: Props) {
   return (
     <GalleryView
       gallery={toGallery(g, owner)}
-      justPaid={paid === "1" && !g.settings.hold ? true : paid === "pending" ? false : undefined}
+      justPaid={paid === "1" && !g.settings.hold ? true : paid === "1" && g.paidLinks?.length ? "partial" : paid === "pending" ? false : undefined}
       studio={studio}
       owner={owner ? { clientView: `/g/${g.slug}?as=client`, notes } : undefined}
     />

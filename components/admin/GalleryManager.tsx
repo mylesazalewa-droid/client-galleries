@@ -18,6 +18,7 @@ type G = {
   expired: boolean;
   clientLogo?: string;
   paid?: boolean;
+  portal?: string;
 };
 
 const LICENSES: { label: string; text: (client: string) => string }[] = [
@@ -39,7 +40,7 @@ async function api(url: string, init: RequestInit = {}) {
     .catch(() => ({ ok: false, error: "Couldn't connect. Try again." }));
 }
 
-export default function GalleryManager({ gallery, demo, activity, stripe }: { gallery: G; demo: boolean; activity: ActivityItem[]; stripe: boolean }) {
+export default function GalleryManager({ gallery, demo, activity, stripe, gmail }: { gallery: G; demo: boolean; activity: ActivityItem[]; stripe: boolean; gmail: boolean }) {
   const router = useRouter();
   const [g, setG] = useState(gallery);
   const [target, setTarget] = useState(""); // "" = main area, otherwise a section id
@@ -171,6 +172,7 @@ export default function GalleryManager({ gallery, demo, activity, stripe }: { ga
           {g.settings.hold && <button className="btn" onClick={() => markPaid()}>Mark as paid</button>}
           <a className="btn" href={`${link}?as=client`} target="_blank" rel="noreferrer">View as client ↗</a>
           <CopyLink path={link} />
+          {g.portal && <CopyLink path={g.portal} label="Copy client portal" />}
           <CopyLink text={invite} label="Copy invite" className="btn primary" />
         </div>
       </section>
@@ -231,6 +233,7 @@ export default function GalleryManager({ gallery, demo, activity, stripe }: { ga
 
         <aside className="mgr-side">
           <Payment g={g} stripe={stripe} demo={demo} say={say} onChange={paymentChanged} onMarkPaid={markPaid} onSave={save} />
+          <Email g={g} gmail={gmail} demo={demo} say={say} onSave={async (p, m) => { const ok = await save(p, m); setFormKey((k) => k + 1); return ok; }} />
           <Settings key={formKey} g={g} onSave={save} />
           <ClientLogo g={g} demo={demo} say={say} onChange={(clientLogo) => setG((cur) => ({ ...cur, clientLogo }))} />
           <Activity items={activity} />
@@ -446,6 +449,7 @@ function Settings({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings> & 
   const [f, setF] = useState({
     title: g.title,
     client: g.settings.client ?? "",
+    clientEmail: g.settings.clientEmail ?? "",
     date: g.settings.date ?? "",
     password: g.settings.password ?? "",
     message: g.settings.message ?? "",
@@ -473,6 +477,7 @@ function Settings({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings> & 
       <h3>Gallery settings</h3>
       <label className="field"><span>Name</span><input required value={f.title} onChange={set("title")} /></label>
       <label className="field"><span>Client</span><input value={f.client} onChange={set("client")} /></label>
+      <label className="field"><span>Client email</span><input type="text" inputMode="email" value={f.clientEmail} onChange={set("clientEmail")} placeholder="name@company.com, another@company.com" /></label>
       <label className="field"><span>Date</span><input type="date" value={f.date} onChange={set("date")} /></label>
       <label className="field"><span>Password</span><input value={f.password} onChange={set("password")} placeholder="None — anyone with the link" autoComplete="off" /></label>
       <label className="field"><span>Closes on</span>
@@ -505,6 +510,10 @@ function Settings({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings> & 
 // ------------------------------------------------------------------ payment
 
 type Pay = { id: string; label: string; email?: string; created: number };
+type Part = { id: string; url: string; amount: number; label: string; paid: boolean; payments: Pay[] };
+
+const usd = (c: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(c / 100);
+const money = (v: string) => Number(v.replace(/[$,\s]/g, ""));
 
 function Payment({ g, stripe, demo, say, onChange, onMarkPaid, onSave }: {
   g: G; stripe: boolean; demo: boolean; say: (t: string) => void;
@@ -513,29 +522,34 @@ function Payment({ g, stripe, demo, say, onChange, onMarkPaid, onSave }: {
 }) {
   const s = g.settings;
   const [amount, setAmount] = useState("");
+  const [split, setSplit] = useState(false);
+  const [deposit, setDeposit] = useState("");
   const [label, setLabel] = useState("");
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [payments, setPayments] = useState<Pay[] | null>(null);
-  const [manual, setManual] = useState(s.payUrl && !s.payLinkId ? s.payUrl : "");
-  const [copied, setCopied] = useState(false);
-  const open = !!s.payLinkId && !!s.hold;
-  const paid = !!s.payLinkId && !s.hold;
+  const [parts, setParts] = useState<Part[] | null>(null);
+  const [manual, setManual] = useState(s.payUrl && !s.payLinkId && !s.payParts?.length ? s.payUrl : "");
+  const [copied, setCopied] = useState("");
+  const hasRequest = !!(s.payParts?.length || s.payLinkId);
 
-  useEffect(() => {
-    if (!stripe || !s.payLinkId) return setPayments(null);
-    api(`/api/admin/galleries/${g.id}/payment`).then((r) => setPayments(r.ok ? r.payments : []));
-  }, [g.id, s.payLinkId, s.hold, stripe]);
+  const load = useCallback(() => {
+    if (!stripe || !hasRequest) return setParts(null);
+    api(`/api/admin/galleries/${g.id}/payment`).then((r) => setParts(r.ok ? r.parts : []));
+  }, [g.id, stripe, hasRequest]);
+  useEffect(() => { load(); }, [load, s.hold, s.payParts, s.payLinkId]);
+
+  const allPaid = !!parts?.length && parts.every((p) => p.paid);
+  const open = hasRequest && !!s.hold && !allPaid;
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
     if (demo) return say("Demo mode — connect Google to request payments.");
     setBusy(true);
-    const res = await api(`/api/admin/galleries/${g.id}/payment`, { method: "POST", body: JSON.stringify({ amount, label }) });
+    const res = await api(`/api/admin/galleries/${g.id}/payment`, { method: "POST", body: JSON.stringify({ amount, label, deposit: split ? deposit : undefined }) });
     setBusy(false);
     if (!res.ok) return say(res.error || "Couldn't create the payment");
-    setEditing(false); setAmount(""); setLabel("");
-    onChange(res.settings, "Payment request created. The gallery is on hold until it's paid.");
+    setEditing(false); setAmount(""); setLabel(""); setDeposit(""); setSplit(false);
+    onChange(res.settings, split ? "Deposit and final payment created. The gallery is on hold until both are paid." : "Payment request created. The gallery is on hold until it's paid.");
   }
 
   async function cancel() {
@@ -543,15 +557,22 @@ function Payment({ g, stripe, demo, say, onChange, onMarkPaid, onSave }: {
     const res = await api(`/api/admin/galleries/${g.id}/payment`, { method: "DELETE" });
     setBusy(false);
     if (!res.ok) return say(res.error || "Couldn't cancel");
-    onChange(res.settings, "Payment request canceled. The old link no longer works.");
+    onChange(res.settings, "Payment request canceled. Its links no longer work.");
   }
 
-  async function copy() {
-    try { await navigator.clipboard.writeText(s.payUrl ?? ""); } catch {}
-    setCopied(true); setTimeout(() => setCopied(false), 1500);
+  async function markPart(p: Part) {
+    setBusy(true);
+    const res = await api(`/api/admin/galleries/${g.id}/payment`, { method: "PATCH", body: JSON.stringify({ action: "paid", part: p.id }) });
+    setBusy(false);
+    if (!res.ok) return say(res.error || "Couldn't update");
+    onChange(res.settings, res.allPaid ? "All paid. Downloads are on." : `${p.label.split(" — ").pop()} marked as paid.`);
+    load();
   }
 
-  const amountLabel = s.payAmount ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(s.payAmount / 100) : "";
+  async function copy(url: string) {
+    try { await navigator.clipboard.writeText(url); } catch {}
+    setCopied(url); setTimeout(() => setCopied(""), 1500);
+  }
 
   if (!stripe) {
     return (
@@ -564,58 +585,167 @@ function Payment({ g, stripe, demo, say, onChange, onMarkPaid, onSave }: {
     );
   }
 
+  const total = money(amount);
+  const dep = money(deposit);
+  const finalAmt = split && total > 0 && dep > 0 ? total - dep : 0;
+
   const form = (
     <form onSubmit={create} className="pay-form">
-      <label className="field"><span>Amount (USD)</span>
+      <label className="field"><span>{split ? "Project total (USD)" : "Amount (USD)"}</span>
         <span className="money-input"><b>$</b><input required inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="2,500" /></span>
       </label>
-      <label className="field"><span>What it&apos;s for</span><input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={`${g.title} — final payment`} /></label>
-      <p className="hint" style={{ marginTop: 0 }}>Clients see watermarked previews and a “Pay {amount ? `$${amount.replace(/^\$/, "")}` : "invoice"}” button. Downloads unlock automatically once Stripe confirms payment.</p>
+      <label className="check"><input type="checkbox" checked={split} onChange={(e) => setSplit(e.target.checked)} /> Split into a deposit and a final payment</label>
+      {split && (
+        <>
+          <label className="field"><span>Deposit</span>
+            <span className="money-input"><b>$</b><input required inputMode="decimal" value={deposit} onChange={(e) => setDeposit(e.target.value)} placeholder={total > 0 ? String(Math.round(total / 2)) : "1,250"} /></span>
+          </label>
+          <div className="presets" style={{ marginTop: -6 }}>
+            {[25, 50].map((pct) => (
+              <button key={pct} type="button" className="chip" disabled={!(total > 0)} onClick={() => setDeposit(String(Math.round((total * pct) / 100 * 100) / 100))}>{pct}%</button>
+            ))}
+            {finalAmt > 0 && <span className="hint" style={{ margin: 0 }}>Final payment: <b>{usd(Math.round(finalAmt * 100))}</b></span>}
+          </div>
+        </>
+      )}
+      <label className="field"><span>What it&apos;s for</span><input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={`${g.title}`} /></label>
+      <p className="hint" style={{ marginTop: 0 }}>
+        {split
+          ? "Clients pay the deposit first, then the final payment. Previews stay watermarked until both are paid."
+          : "Clients see watermarked previews and a Pay button. Downloads unlock automatically once Stripe confirms payment."}
+      </p>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button className="btn primary" disabled={busy}>{busy ? "Creating…" : open ? "Replace request" : "Request payment"}</button>
+        <button className="btn primary" disabled={busy}>{busy ? "Creating…" : hasRequest ? "Replace request" : "Request payment"}</button>
         {editing && <button type="button" className="btn" onClick={() => setEditing(false)}>Cancel</button>}
       </div>
     </form>
   );
 
+  const list = parts && (
+    <ul className="pay-parts">
+      {parts.map((p) => (
+        <li key={p.id} className={p.paid ? "paid" : ""}>
+          <div className="pay-part-head">
+            <span className={`pay-status ${p.paid ? "ok" : "wait"}`}><span className="dot" />{p.paid ? "Paid" : "Due"}</span>
+            <b>{usd(p.amount)}</b>
+            <span className="pay-label">{parts.length > 1 ? p.label.split(" — ").pop() : p.label}</span>
+          </div>
+          {p.payments.map((x) => (
+            <div key={x.id} className="pay-line">{x.label}{x.email ? ` · ${x.email}` : ""} · {new Date(x.created * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
+          ))}
+          {!p.paid && (
+            <div className="pay-actions">
+              <button type="button" className="link-btn" onClick={() => copy(p.url)}>{copied === p.url ? "Copied" : "Copy link"}</button>
+              <button type="button" className="link-btn" disabled={busy} onClick={() => markPart(p)}>Mark paid</button>
+            </div>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+
   return (
     <div className="panel pay-panel">
       <h3>Payment</h3>
-      {open && !editing && (
+      {hasRequest && !editing && (
         <>
-          <div className="pay-status wait"><span className="dot" /> Waiting for payment</div>
-          <div className="pay-amount">{amountLabel}</div>
-          {s.payLabel && <div className="pay-label">{s.payLabel}</div>}
-          <div className="copy-row" style={{ margin: "12px 0" }}>
-            <input readOnly value={s.payUrl ?? ""} onFocus={(e) => e.target.select()} />
-            <button type="button" className="btn" onClick={copy}>{copied ? "Copied" : "Copy"}</button>
+          {parts === null ? <p className="hint">Checking payments…</p> : (
+            <>
+              <div className={`pay-status ${open ? "wait" : "ok"}`} style={{ marginBottom: 10 }}>
+                <span className="dot" /> {open ? (parts.length > 1 && parts.some((p) => p.paid) ? "Deposit paid · final payment due" : "Waiting for payment") : "Paid in full"}
+              </div>
+              {list}
+            </>
+          )}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+            {open && parts && parts.length === 1 && <button type="button" className="btn" disabled={busy} onClick={onMarkPaid}>Mark as paid</button>}
+            <button type="button" className="btn" onClick={() => setEditing(true)}>{open ? "Change amount" : "New payment request"}</button>
+            {open && <button type="button" className="link-btn" disabled={busy} onClick={cancel}>Cancel request</button>}
           </div>
+          {open && <p className="hint">Paid by check or another way? “Mark paid” unlocks it and turns off that Stripe link.</p>}
+        </>
+      )}
+      {(!hasRequest || editing) && form}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ email
+
+type MailKind = "invite" | "payment";
+
+function Email({ g, gmail, demo, say, onSave }: {
+  g: G; gmail: boolean; demo: boolean; say: (t: string) => void;
+  onSave: (p: Partial<GallerySettings>, msg?: string) => Promise<boolean>;
+}) {
+  const s = g.settings;
+  const [kind, setKind] = useState<MailKind | null>(null);
+  const [to, setTo] = useState("");
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [button, setButton] = useState("");
+  const [busy, setBusy] = useState(false);
+  const hasRequest = !!(s.payParts?.length || s.payLinkId || s.payUrl);
+  const connect = `/api/auth/google?gmail=1&back=${encodeURIComponent(`/admin/g/${g.id}`)}`;
+
+  async function open(k: MailKind) {
+    if (demo) return say("Demo mode — connect Google to send email.");
+    setBusy(true);
+    const res = await api(`/api/admin/galleries/${g.id}/email?kind=${k}`);
+    setBusy(false);
+    if (!res.ok) return say(res.error || "Couldn't load the email");
+    setKind(k); setTo(res.to || s.clientEmail || ""); setSubject(res.draft.subject); setBody(res.draft.body); setButton(res.draft.button?.label ?? "");
+  }
+
+  async function send(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    const res = await api(`/api/admin/galleries/${g.id}/email`, { method: "POST", body: JSON.stringify({ kind, to, subject, body }) });
+    setBusy(false);
+    if (!res.ok) {
+      say(res.error || "Couldn't send");
+      if (res.reconnect) location.href = connect;
+      return;
+    }
+    if (to.trim() && to.trim() !== (s.clientEmail ?? "")) onSave({ clientEmail: to.trim() }, "Sent. Saved the client's email for next time.");
+    else say(`Sent to ${to}`);
+    setKind(null);
+  }
+
+  return (
+    <div className="panel">
+      <h3>Email the client</h3>
+      {!gmail && !demo ? (
+        <>
+          <p className="hint" style={{ marginTop: 0 }}>Send invites, payment links and automatic reminders from your own Gmail. Replies come straight to your inbox.</p>
+          <a className="btn primary" href={connect}>Connect Gmail</a>
+        </>
+      ) : kind ? (
+        <form onSubmit={send} className="mail-form">
+          <label className="field"><span>To</span><input required value={to} onChange={(e) => setTo(e.target.value)} placeholder="name@company.com" /></label>
+          <label className="field"><span>Subject</span><input required value={subject} onChange={(e) => setSubject(e.target.value)} /></label>
+          <label className="field"><span>Message</span><textarea rows={9} value={body} onChange={(e) => setBody(e.target.value)} /></label>
+          {button && <p className="hint" style={{ marginTop: -4 }}>A <b>{button}</b> button is added below your message.</p>}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn primary" disabled={busy}>{busy ? "Sending…" : "Send"}</button>
+            <button type="button" className="btn" onClick={() => setKind(null)}>Cancel</button>
+          </div>
+        </form>
+      ) : (
+        <>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button type="button" className="btn" disabled={busy} onClick={onMarkPaid}>Mark as paid</button>
-            <button type="button" className="btn" disabled={busy} onClick={() => setEditing(true)}>Change amount</button>
-            <button type="button" className="link-btn" disabled={busy} onClick={cancel}>Cancel request</button>
+            <button className="btn" disabled={busy} onClick={() => open("invite")}>Send gallery invite</button>
+            {s.hold && hasRequest && <button className="btn" disabled={busy} onClick={() => open("payment")}>Send payment link</button>}
           </div>
-          <p className="hint">Paid by check or another way? “Mark as paid” unlocks the gallery and turns off the Stripe link.</p>
-        </>
-      )}
-      {paid && !editing && (
-        <>
-          <div className="pay-status ok"><span className="dot" /> Paid{amountLabel ? ` · ${amountLabel}` : ""}</div>
-          {s.payLabel && <div className="pay-label">{s.payLabel}</div>}
-          {payments?.length ? (
-            <ul className="pay-list">
-              {payments.map((p) => (
-                <li key={p.id}><b>{p.label}</b> {p.email && <span>{p.email}</span>} <span>{new Date(p.created * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span></li>
-              ))}
-            </ul>
-          ) : payments ? <p className="hint">Marked as paid by you.</p> : null}
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-            <button type="button" className="btn" onClick={() => setEditing(true)}>New payment request</button>
-            <button type="button" className="link-btn" disabled={busy} onClick={cancel}>Clear</button>
+          <div className="mail-auto">
+            <div className="eyebrow" style={{ marginBottom: 6 }}>Automatic reminders</div>
+            <label className="check"><input type="checkbox" checked={!!s.remindUnpaid} onChange={(e) => onSave({ remindUnpaid: e.target.checked }, e.target.checked ? "Unpaid reminders on" : "Unpaid reminders off")} /> Remind about an unpaid payment every 3 days (up to 3 times)</label>
+            <label className="check"><input type="checkbox" checked={!!s.remindClosing} onChange={(e) => onSave({ remindClosing: e.target.checked }, e.target.checked ? "Closing reminder on" : "Closing reminder off")} /> Remind them 3 days before the gallery closes</label>
+            {!s.clientEmail && (s.remindUnpaid || s.remindClosing) && <p className="hint" style={{ color: "var(--warn, #d9a441)" }}>Add the client&apos;s email in Gallery settings so reminders can go out.</p>}
+            <p className="hint">Reminders go out each morning around 10am from your Gmail. Sign in to the dashboard at least once a week to keep them running.</p>
           </div>
         </>
       )}
-      {(!s.payLinkId || editing) && form}
     </div>
   );
 }

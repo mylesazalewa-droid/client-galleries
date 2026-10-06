@@ -28,6 +28,8 @@ export type GalleryRecord = {
   clientLogoId?: string;
   /** a Stripe payment for this gallery was confirmed */
   paid?: boolean;
+  /** payment-link ids already paid (for split requests) */
+  paidLinks?: string[];
 };
 
 /** Gallery-folder file name for the client's logo (hidden from the grid by the leading underscore). */
@@ -155,17 +157,34 @@ export function toGallery(g: GalleryRecord, asOwner = false): Gallery {
           )
         : undefined,
     license: g.settings.license,
-    payUrl: hold ? payLink(g) : undefined,
-    payDue: hold && g.settings.payAmount ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(g.settings.payAmount / 100) : undefined,
+    ...payView(g, hold),
     clientLogo: g.clientLogoId ? `/api/client-logo/${g.slug}?v=${logoV}` : undefined,
   };
 }
 
+const usd = (c: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(c / 100);
+
+/** What the client sees about payment: the next part due, and every part's status when split. */
+function payView(g: GalleryRecord, hold: boolean): Pick<Gallery, "payUrl" | "payDue" | "payDueLabel" | "payParts"> {
+  if (!hold) return {};
+  const s = g.settings;
+  const parts = s.payParts?.length ? s.payParts : s.payLinkId && s.payUrl ? [{ id: s.payLinkId, url: s.payUrl, amount: s.payAmount ?? 0, label: s.payLabel ?? "" }] : [];
+  if (!parts.length) return { payUrl: payLink(g) };
+  const paid = new Set(g.paidLinks ?? []);
+  const next = parts.find((p) => !paid.has(p.id));
+  return {
+    payUrl: next ? payLink(g, next.url) : undefined,
+    payDue: next ? usd(next.amount) : undefined,
+    payDueLabel: parts.length > 1 && next ? next.label : undefined,
+    payParts: parts.length > 1 ? parts.map((p) => ({ label: p.label, amount: usd(p.amount), paid: paid.has(p.id) })) : undefined,
+  };
+}
+
 /** The Stripe Payment Link with this gallery tagged, so the payment can be matched back to it. */
-export function payLink(g: GalleryRecord) {
-  if (!g.settings.payUrl) return undefined;
+export function payLink(g: GalleryRecord, url = g.settings.payUrl) {
+  if (!url) return undefined;
   try {
-    const u = new URL(g.settings.payUrl);
+    const u = new URL(url);
     u.searchParams.set("client_reference_id", g.id);
     return u.toString();
   } catch {
@@ -317,13 +336,15 @@ async function loadFromDrive(force = false): Promise<GalleryRecord[]> {
       }),
   );
 
-  // Galleries paid through Stripe come off hold automatically.
-  const { paidGalleries } = await import("./payments");
+  // Galleries paid through Stripe come off hold automatically (split requests once every part is paid).
+  const { paidGalleries, payParts } = await import("./payments");
   const paid = await paidGalleries().catch(() => ({ galleries: new Set<string>(), links: new Set<string>() }));
   for (const r of records) {
+    const parts = payParts(r.settings);
+    r.paidLinks = parts.filter((p) => paid.links.has(p.id)).map((p) => p.id);
     if (!r.settings.hold) continue;
-    const linkId = r.settings.payLinkId;
-    if (linkId ? paid.links.has(linkId) : paid.galleries.has(r.id) && !!r.settings.payUrl) {
+    const done = parts.length ? r.paidLinks.length === parts.length : paid.galleries.has(r.id) && !!r.settings.payUrl;
+    if (done) {
       r.paid = true;
       r.settings = { ...r.settings, hold: false };
     }

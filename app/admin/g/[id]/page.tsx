@@ -7,6 +7,7 @@ import { readActivity } from "@/lib/activity";
 import { getRecordById, isExpired } from "@/lib/galleries";
 import { currentOwner } from "@/lib/owner";
 import { stripeReady } from "@/lib/stripe";
+import { portalSlug } from "@/lib/portal";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Edit gallery" };
@@ -26,6 +27,7 @@ export default async function ManagePage({ params }: { params: Promise<{ id: str
       <GalleryManager
         demo={owner.demo}
         stripe={stripeReady()}
+        gmail={owner.gmail}
         activity={activity}
         gallery={{
           id: g.id,
@@ -39,6 +41,7 @@ export default async function ManagePage({ params }: { params: Promise<{ id: str
           expired: isExpired(g.settings),
           clientLogo: g.clientLogoId ? `/api/client-logo/${g.slug}?v=${g.clientLogoId.slice(-8)}` : undefined,
           paid: !!g.paid,
+          portal: g.settings.client?.trim() ? `/c/${portalSlug(g.settings.client)}` : undefined,
         }}
       />
     </AdminShell>

@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { cookies } from "next/headers";
 import { oauthClientId, oauthClientSecret, ownerEmails } from "@/lib/config";
 import { writeSession } from "@/lib/owner";
@@ -36,11 +37,26 @@ export async function GET(req: Request) {
   if (!claims.email_verified || !ownerEmails.includes(email)) return back(req, "not-owner");
   if (!String(tok.scope ?? "").includes("drive.file")) return back(req, "scope");
 
+  const gmail = String(tok.scope ?? "").includes("gmail.send");
   await writeSession({
     email,
     rt: tok.refresh_token,
     at: tok.access_token,
     exp: Date.now() + (tok.expires_in ?? 3600) * 1000,
+    gmail,
   });
-  return Response.redirect(new URL("/admin", req.url));
+  // Keep a sealed copy of this sign-in in CLIENTS so the daily reminders can send email as you.
+  if (gmail && tok.refresh_token) {
+    after(async () => {
+      try {
+        const [{ writeMailerKey }, { sealMailer }] = await Promise.all([import("@/lib/drive-admin"), import("@/lib/mail")]);
+        await writeMailerKey(tok.access_token, sealMailer(email, tok.refresh_token));
+      } catch (e) {
+        console.warn("couldn't save mailer key", e);
+      }
+    });
+  }
+  const next = jar.get("after_login")?.value;
+  jar.delete("after_login");
+  return Response.redirect(new URL(next && next.startsWith("/admin") ? next : "/admin", req.url));
 }

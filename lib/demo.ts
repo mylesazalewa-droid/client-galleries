@@ -52,7 +52,14 @@ export function demoGalleries(): GalleryRecord[] {
       id: "demo-2",
       slug: "fall-leadership-conference",
       title: "Fall Leadership Conference",
-      settings: { client: "Great Lakes Financial Network", date: "2026-08-02", password: "demo", hold: true, payUrl: "https://buy.stripe.com/test_demo" },
+      settings: {
+        client: "Great Lakes Financial Network", date: "2026-08-02", password: "demo", hold: true, clientEmail: "events@example.org",
+        payParts: [
+          { id: "plink_demo_deposit", url: "https://buy.stripe.com/test_demo", amount: 125000, label: "Fall Leadership Conference — deposit" },
+          { id: "plink_demo_final", url: "https://buy.stripe.com/test_demo", amount: 125000, label: "Fall Leadership Conference — final payment" },
+        ],
+      },
+      paidLinks: ["plink_demo_deposit"],
       cover: p[9],
       sections: [],
       extras: [],

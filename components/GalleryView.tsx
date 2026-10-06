@@ -8,6 +8,7 @@ import ThemeToggle from "./ThemeToggle";
 import { Check, Down, Download, Film, Heart, Lock, Note, Photo, Play, Send } from "./icons";
 
 type Fav = { note: string };
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 type Filter = "all" | "photos" | "videos" | "favorites";
 
 type Props = {
@@ -16,7 +17,7 @@ type Props = {
   /** set when the owner is viewing: shows a banner with a link to the client view */
   owner?: { clientView: string; notes: string[] };
   /** true right after a Stripe payment unlocked the gallery; false while it's still processing */
-  justPaid?: boolean;
+  justPaid?: boolean | "partial";
 };
 
 export default function GalleryView({ gallery, studio, owner, justPaid }: Props) {
@@ -206,6 +207,12 @@ export default function GalleryView({ gallery, studio, owner, justPaid }: Props)
         </div>
       </nav>
 
+      {justPaid === "partial" && gallery.hold && (
+        <div className="hold-bar paid" role="status">
+          <Check />
+          <span><b>Deposit received — thank you!</b> Your files unlock once the final payment is in.</span>
+        </div>
+      )}
       {justPaid === true && (
         <div className="hold-bar paid" role="status">
           <Check />
@@ -220,8 +227,26 @@ export default function GalleryView({ gallery, studio, owner, justPaid }: Props)
       {gallery.hold && justPaid !== false && (
         <div className="hold-bar">
           <Lock />
-          <span><b>Preview only.</b> Full-resolution downloads unlock once the project is paid.</span>
-          {gallery.payUrl && <a className="btn primary pay-btn" href={gallery.payUrl}>{gallery.payDue ? `Pay ${gallery.payDue}` : "Pay invoice"}</a>}
+          <span>
+            <b>Preview only.</b>{" "}
+            {gallery.payParts
+              ? gallery.payParts.some((p) => p.paid)
+                ? "Thanks for the deposit! Full-resolution downloads unlock once the final payment is in."
+                : "Full-resolution downloads unlock once the deposit and final payment are in."
+              : "Full-resolution downloads unlock once the project is paid."}
+          </span>
+          {gallery.payParts && (
+            <span className="pay-steps">
+              {gallery.payParts.map((p, i) => (
+                <span key={i} className={p.paid ? "done" : ""}>{p.paid ? "✓ " : ""}{cap(p.label.split(" — ").pop() ?? "")} {p.amount}</span>
+              ))}
+            </span>
+          )}
+          {gallery.payUrl && (
+            <a className="btn primary pay-btn" href={gallery.payUrl}>
+              {gallery.payDue ? `Pay ${gallery.payDueLabel ? `${gallery.payDueLabel.split(" — ").pop()} ` : ""}${gallery.payDue}` : "Pay invoice"}
+            </a>
+          )}
         </div>
       )}
 

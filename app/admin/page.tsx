@@ -2,11 +2,20 @@ import type { Metadata } from "next";
 import AdminLogin from "@/components/admin/AdminLogin";
 import AdminShell from "@/components/admin/AdminShell";
 import Dashboard, { type DashGallery, type PaymentRow } from "@/components/admin/Dashboard";
-import { money } from "@/lib/stripe";
+import { payParts, usd } from "@/lib/payments";
+import type { GalleryRecord } from "@/lib/galleries";
+
 import { isDemo, oauthReady, studio } from "@/lib/config";
 import { findActivitySheet, readActivity, summarize } from "@/lib/activity";
 import { isExpired, loadAll, resolveRoot } from "@/lib/galleries";
 import { currentOwner } from "@/lib/owner";
+import { portalLinks } from "@/lib/portal";
+
+function dueOf(g: GalleryRecord) {
+  const paid = new Set(g.paidLinks ?? []);
+  const left = payParts(g.settings).filter((p) => !paid.has(p.id)).reduce((n, p) => n + p.amount, 0);
+  return left ? usd(left) : undefined;
+}
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Dashboard" };
@@ -22,6 +31,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   let loadError = "";
   let activityUrl: string | null = null;
   let payments: PaymentRow[] = [];
+  let portals: { client: string; slug: string; count: number }[] = [];
   try {
     const [records, sheetId, rows] = await Promise.all([
       loadAll(true),
@@ -30,6 +40,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     ]);
     activityUrl = sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}/edit` : owner.demo ? "" : null;
     const stats = summarize(rows);
+    portals = await portalLinks();
     payments = rows
       .filter((r) => r.event === "Paid" || r.event === "Marked paid")
       .slice(0, 6)
@@ -40,7 +51,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       return {
         expired: isExpired(g.settings),
         hold: !!g.settings.hold,
-        due: g.settings.hold && g.settings.payAmount ? money(g.settings.payAmount) : undefined,
+        due: g.settings.hold ? dueOf(g) : undefined,
         expires: g.settings.expires,
         views: st?.views ?? 0,
         downloads: st?.downloads ?? 0,
@@ -65,7 +76,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
   return (
     <AdminShell studio={studio} email={owner.email} demo={owner.demo}>
-      <Dashboard galleries={galleries} demo={owner.demo} loadError={loadError} rootMissing={rootMissing} activityUrl={activityUrl} payments={payments} />
+      <Dashboard galleries={galleries} demo={owner.demo} loadError={loadError} rootMissing={rootMissing} activityUrl={activityUrl} payments={payments} portals={portals} />
     </AdminShell>
   );
 }

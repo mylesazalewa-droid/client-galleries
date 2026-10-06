@@ -9,7 +9,7 @@ import { cookieSecret, isDemo, oauthClientId, oauthClientSecret, oauthReady, own
  */
 export const OWNER_COOKIE = "owner";
 
-type Session = { email: string; rt?: string; at?: string; exp?: number; demo?: boolean };
+type Session = { email: string; rt?: string; at?: string; exp?: number; demo?: boolean; gmail?: boolean };
 
 const key = () => createHash("sha256").update(`owner:${cookieSecret}`).digest();
 
@@ -50,7 +50,7 @@ export async function readSession(): Promise<Session | null> {
 /** For server components: who is signed in (no token refresh). */
 export async function currentOwner() {
   const s = await readSession();
-  return s ? { email: s.email, demo: !!s.demo } : null;
+  return s ? { email: s.email, demo: !!s.demo, gmail: !!s.gmail } : null;
 }
 
 export async function writeSession(s: Session) {

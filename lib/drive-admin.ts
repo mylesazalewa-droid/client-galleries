@@ -87,6 +87,11 @@ function cleanSettings(s: GallerySettings): GallerySettings {
   if (s.payLinkId) out.payLinkId = s.payLinkId;
   if (s.payAmount && s.payAmount > 0) out.payAmount = Math.round(s.payAmount);
   if (s.payLabel?.trim()) out.payLabel = s.payLabel.trim();
+  if (s.payParts?.length) out.payParts = s.payParts;
+  if (s.payParts?.length && s.payRequestedAt) out.payRequestedAt = s.payRequestedAt;
+  if (s.clientEmail?.trim()) out.clientEmail = s.clientEmail.trim();
+  if (s.remindUnpaid) out.remindUnpaid = true;
+  if (s.remindClosing) out.remindClosing = true;
   return out;
 }
 
@@ -244,4 +249,22 @@ export async function ensureActivitySheet(token: string) {
   }
   rememberActivitySheet(sheet.id);
   return sheet.id;
+}
+
+// ---------------------------------------------------------------- email sender key
+
+export const MAILER_FILE = ".mailer-key";
+
+/** Saves the owner's (encrypted) Google sign-in so scheduled reminders can send email as them. */
+export async function writeMailerKey(token: string, sealed: string) {
+  const root = await resolveRoot(true);
+  if (!root) return; // no CLIENTS folder yet; saved on the next sign-in
+  const existing = await ownerFind(token, `name='${MAILER_FILE}' and '${root}' in parents and trashed=false`);
+  if (existing) {
+    const { body, headers } = multipart({}, sealed);
+    await call(token, `${UPLOAD}/files/${existing}?uploadType=multipart`, { method: "PATCH", body, headers });
+    return;
+  }
+  const { body, headers } = multipart({ name: MAILER_FILE, parents: [root], mimeType: "text/plain" }, sealed);
+  await call(token, `${UPLOAD}/files?uploadType=multipart&fields=id`, { method: "POST", body, headers });
 }

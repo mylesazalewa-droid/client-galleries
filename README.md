@@ -119,6 +119,9 @@ Copy `.env.example` to `.env.local` and fill in:
 - **Client logo**: upload it in the gallery manager; it shows as “Prepared for” on the gallery, film pages and previews.
 - **Usage rights**: pick a preset (Unlimited, Web & social 1 yr, Internal, Event) or write your own; clients see it as a card.
 - **Payments (Stripe)**: add a restricted key to Vercel as `STRIPE_SECRET_KEY` with *Products: Write, Prices: Write, Payment Links: Write, Checkout Sessions: Read*. In a gallery's **Payment** panel, enter an amount → the app creates the Stripe payment link, puts the gallery on hold and shows clients a “Pay $X” button. After Stripe confirms, the gallery unlocks on its own. From the panel you can copy the link, change the amount (the old link is turned off), cancel the request, or mark it paid if you got a check. The dashboard lists outstanding requests and recent payments.
+- **Deposit + final payment**: in the Payment panel tick “Split into a deposit and a final payment”. Clients pay the deposit, then the final payment; previews stay watermarked until both are paid. Each part can be marked paid by hand.
+- **Client portals**: every client (by the Client field) gets one private link listing all of their galleries — see “Client portals” on the dashboard or “Copy client portal” in a gallery.
+- **Email from your Gmail**: click “Connect Gmail” in a gallery (the Gmail API must be enabled in your Google Cloud project). Send the invite or payment link from the dashboard, and turn on automatic reminders (unpaid payment every 3 days, up to 3 times; 3 days before a gallery closes). Reminders run daily at 10am Eastern via Vercel Cron (`vercel.json`); optionally set `CRON_SECRET` in Vercel to lock the endpoint.
 - **Owner preview**: when you're signed in you see everything; use “See what clients see” (or add `?as=client` to a gallery link) to check the password screen, watermarks and expiry.
 
 ## Good to know

@@ -49,7 +49,7 @@ export function ago(iso?: string) {
 
 export type PaymentRow = { galleryId: string; gallery: string; event: string; detail: string; time: string };
 
-export default function Dashboard({ galleries, demo, loadError, rootMissing, activityUrl, payments = [] }: Props & { payments?: PaymentRow[] }) {
+export default function Dashboard({ galleries, demo, loadError, rootMissing, activityUrl, payments = [], portals = [] }: Props & { payments?: PaymentRow[]; portals?: { client: string; slug: string; count: number }[] }) {
   const [creating, setCreating] = useState(false);
   const router = useRouter();
 
@@ -111,6 +111,22 @@ export default function Dashboard({ galleries, demo, loadError, rootMissing, act
         <div className="notice" style={{ marginTop: 0, marginBottom: 20 }}>
           A <b>CLIENTS</b> folder will be created in your Google Drive when you make your first gallery. Every gallery lives inside it, and the app can&apos;t see or touch anything else in your Drive.
         </div>
+      )}
+
+      {portals.length > 0 && (
+        <section className="portals">
+          <div className="eyebrow">Client portals</div>
+          <p className="hint" style={{ margin: "4px 0 10px" }}>One link per client with all of their galleries. Galleries are grouped by the Client field.</p>
+          <div className="portal-chips">
+            {portals.map((p) => (
+              <span key={p.slug} className="portal-chip">
+                <a href={`/c/${p.slug}`} target="_blank" rel="noreferrer">{p.client}</a>
+                <span>{p.count}</span>
+                <CopyLink path={`/c/${p.slug}`} label="Copy link" className="link-btn" />
+              </span>
+            ))}
+          </div>
+        </section>
       )}
 
       {galleries.length ? (
