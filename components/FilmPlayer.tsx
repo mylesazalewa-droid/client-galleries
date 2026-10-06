@@ -22,6 +22,8 @@ export default function FilmPlayer({ item, autoPlay, allowDownload, watermark, o
   const src = current?.src ?? item.src;
   const ref = useRef<HTMLVideoElement>(null);
   const resume = useRef<{ t: number; playing: boolean } | null>(null);
+  const [aspect, setAspect] = useState<number | undefined>(undefined);
+  const known = current ? current.width / current.height : item.width && item.height ? item.width / item.height : undefined;
 
   useEffect(() => setVid(item.versions?.[0]?.id ?? item.id), [item.id, item.versions]);
 
@@ -29,6 +31,7 @@ export default function FilmPlayer({ item, autoPlay, allowDownload, watermark, o
     const v = ref.current;
     if (v) resume.current = { t: v.currentTime, playing: !v.paused };
     setVid(id);
+    setAspect(undefined);
     onVersion?.(id);
   }
 
@@ -50,6 +53,8 @@ export default function FilmPlayer({ item, autoPlay, allowDownload, watermark, o
           disablePictureInPicture={!!watermark}
           onContextMenu={watermark ? (e) => e.preventDefault() : undefined}
           onLoadedMetadata={(e) => {
+            const v = e.currentTarget;
+            if (v.videoWidth && v.videoHeight) setAspect(v.videoWidth / v.videoHeight);
             if (resume.current) {
               e.currentTarget.currentTime = Math.min(resume.current.t, e.currentTarget.duration || resume.current.t);
               resume.current = null;
@@ -60,7 +65,7 @@ export default function FilmPlayer({ item, autoPlay, allowDownload, watermark, o
             <track key={c.id} kind="captions" src={c.src} srcLang={c.lang ?? "en"} label={c.label} />
           ))}
         </video>
-        {watermark && <Watermark spec={watermark} big />}
+        {watermark && <Watermark spec={watermark} big aspect={aspect ?? known ?? 16 / 9} />}
       </div>
       {!bare && (versions.length > 1 || item.captions?.length) && (
         <div className="film-bar">

@@ -304,7 +304,7 @@ export default function Lightbox({ items, index, onIndex, onClose, favs, onToggl
                 <FilmPlayer item={item} autoPlay allowDownload={allowDownload} watermark={watermark} />
               </div>
             )}
-            {watermark && item.kind === "photo" && <Watermark spec={watermark} big />}
+            {watermark && item.kind === "photo" && <Watermark spec={watermark} big aspect={item.width && item.height ? item.width / item.height : undefined} />}
           </div>
         </div>
         <button className="lb-arrow prev" onClick={() => go(-1)} disabled={index === 0} aria-label="Previous"><Left /></button>

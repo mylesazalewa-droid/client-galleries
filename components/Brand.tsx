@@ -6,7 +6,17 @@ export function Brand({ studio, className = "brand serif" }: { studio: Studio; c
 }
 
 /** Your watermark over previews while a payment hold is on: tiled, one big mark in the center, or a corner mark. */
-export function Watermark({ spec, big = false }: { spec: WatermarkSpec; big?: boolean }) {
+export function Watermark({ spec, big = false, aspect }: { spec: WatermarkSpec; big?: boolean; aspect?: number }) {
+  // With an aspect ratio, the mark sits on the picture itself (not on letterbox bars around it).
+  if (aspect && Number.isFinite(aspect) && aspect > 0) {
+    return (
+      <span className="wm-fit" aria-hidden>
+        <span className="wm-box" style={{ "--ar": aspect } as React.CSSProperties}>
+          <Watermark spec={spec} big={big} />
+        </span>
+      </span>
+    );
+  }
   const cls = `wm2 wm-${spec.layout} ${big ? "big" : ""}`;
   const style = { opacity: spec.opacity } as React.CSSProperties;
   if (spec.src) {
