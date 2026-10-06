@@ -1,6 +1,6 @@
 import { after } from "next/server";
 import { cookies } from "next/headers";
-import { oauthClientId, oauthClientSecret, ownerEmails } from "@/lib/config";
+import { oauthClientId, oauthClientSecret, ownerEmails, siteOrigin } from "@/lib/config";
 import { writeSession } from "@/lib/owner";
 
 export const runtime = "nodejs";
@@ -24,7 +24,7 @@ export async function GET(req: Request) {
       code: url.searchParams.get("code") ?? "",
       client_id: oauthClientId,
       client_secret: oauthClientSecret,
-      redirect_uri: `${url.origin}/api/auth/callback`,
+      redirect_uri: `${siteOrigin(url.origin)}/api/auth/callback`,
       grant_type: "authorization_code",
     }),
   });

@@ -31,3 +31,10 @@ export const ownerEmails = (process.env.OWNER_EMAILS || "")
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
 export const oauthReady = !!(oauthClientId && oauthClientSecret && ownerEmails.length);
+
+/** The site's main address. Google sign-in only accepts this one, so other Vercel URLs hand off to it. */
+export function siteOrigin(fallback: string) {
+  if (process.env.SITE_URL) return process.env.SITE_URL.replace(/\/$/, "");
+  if (process.env.VERCEL_ENV === "production" && process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  return fallback;
+}

@@ -1,6 +1,6 @@
 import { randomBytes } from "crypto";
 import { cookies } from "next/headers";
-import { oauthClientId, oauthReady } from "@/lib/config";
+import { oauthClientId, oauthReady, siteOrigin } from "@/lib/config";
 
 export const runtime = "nodejs";
 
@@ -9,14 +9,18 @@ const SCOPES = ["openid", "email", "https://www.googleapis.com/auth/drive.file"]
 
 export async function GET(req: Request) {
   if (!oauthReady) return Response.redirect(new URL("/admin?error=setup", req.url));
+  // Started on another address for the site (e.g. a Vercel preview URL)? Continue on the main one.
+  const here = new URL(req.url);
+  const main = siteOrigin(here.origin);
+  if (main !== here.origin) return Response.redirect(`${main}${here.pathname}${here.search}`);
   const state = randomBytes(16).toString("hex");
-  const back = new URL(req.url).searchParams.get("back");
+  const back = here.searchParams.get("back");
   if (back?.startsWith("/admin")) (await cookies()).set("after_login", back, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 600 });
   (await cookies()).set("oauth_state", state, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 600 });
 
-  const origin = new URL(req.url).origin;
+  const origin = main;
   // "Connect Gmail" asks for permission to send email as you, on top of Drive.
-  const scopes = new URL(req.url).searchParams.get("gmail") ? [...SCOPES, "https://www.googleapis.com/auth/gmail.send"] : SCOPES;
+  const scopes = here.searchParams.get("gmail") ? [...SCOPES, "https://www.googleapis.com/auth/gmail.send"] : SCOPES;
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   url.search = new URLSearchParams({
     client_id: oauthClientId,
