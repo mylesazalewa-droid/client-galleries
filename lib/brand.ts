@@ -16,6 +16,8 @@ export type Brand = {
   watermarkId?: string;
   landingId?: string;
   landingKind?: MediaKind;
+  /** sessions that started before this time (ms) are signed out */
+  signoutBefore?: number;
 };
 
 export const BRAND_FILE = "brand.json";
@@ -85,4 +87,10 @@ export function inkFor(hex?: string) {
     return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
   });
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4 ? "#16110b" : "#fffaf3";
+}
+
+/** Owner sessions started before this moment are no longer valid ("Sign out everywhere"). */
+export async function signedOutBefore() {
+  const { brand } = await loadBrand();
+  return brand.signoutBefore ?? 0;
 }

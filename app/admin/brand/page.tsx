@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import BrandEditor from "@/components/admin/BrandEditor";
 import { getStudio, loadBrand } from "@/lib/brand";
-import { studio as envStudio } from "@/lib/config";
+import { studio as envStudio, ownerEmails } from "@/lib/config";
+import AccessPanel from "@/components/admin/AccessPanel";
 import { currentOwner } from "@/lib/owner";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,7 @@ export default async function BrandPage() {
   return (
     <AdminShell studio={envStudio} email={owner.email} demo={owner.demo} back>
       <BrandEditor demo={owner.demo} brand={brand} studio={studio} />
+      <AccessPanel demo={owner.demo} owners={owner.demo ? ["you@example.com"] : ownerEmails} />
     </AdminShell>
   );
 }

@@ -30,7 +30,9 @@ export const ownerEmails = (process.env.OWNER_EMAILS || "")
   .split(",")
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
-export const oauthReady = !!(oauthClientId && oauthClientSecret && ownerEmails.length);
+/** Owner sign-in only turns on with a real GALLERY_SECRET (it seals the login cookie); never with the built-in placeholder. */
+export const strongSecret = !!process.env.GALLERY_SECRET && process.env.GALLERY_SECRET !== "change-me-in-production";
+export const oauthReady = !!(oauthClientId && oauthClientSecret && ownerEmails.length && strongSecret);
 
 /** The site's main address. Google sign-in only accepts this one, so other Vercel URLs hand off to it. */
 export function siteOrigin(fallback: string) {

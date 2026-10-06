@@ -539,7 +539,7 @@ select.move:hover { color: var(--text); }
 .film-main .film { position: relative; inset: auto; }
 .film-main .film-stage { flex: none; height: min(70dvh, calc((100vw - 32px) * 9 / 16)); border-radius: 14px; overflow: hidden; background: #000; }
 .film-main .film-bar { padding: 14px 0 0; justify-content: flex-start; }
-.film-info { display: flex; align-items: end; justify-content: space-between; gap: 18px; flex-wrap: wrap; margin-top: 22px; }
+.film-info { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; flex-wrap: wrap; margin-top: 22px; }
 .film-info h1 { margin: 6px 0 0; font-size: clamp(32px, 5vw, 54px); font-weight: 400; line-height: 1.02; }
 .film-info .btn svg { width: 17px; height: 17px; }
 .rights.compact { margin: 40px 0 0; max-width: none; }
@@ -640,3 +640,8 @@ select.move:hover { color: var(--text); }
 .mail-form textarea { font-size: 14.5px; line-height: 1.5; }
 .switch-row.disabled { cursor: default; opacity: .7; }
 .switch:disabled { cursor: not-allowed; opacity: .5; }
+.access-panel { max-width: 1100px; margin: 22px auto 0; }
+.access-list { list-style: none; padding: 0; margin: 10px 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.access-list li { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; }
+.access-list .dot { width: 8px; height: 8px; border-radius: 50%; background: #3fae6b; }
+.access-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 8px; }

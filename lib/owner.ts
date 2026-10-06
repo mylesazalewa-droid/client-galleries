@@ -9,7 +9,7 @@ import { cookieSecret, isDemo, oauthClientId, oauthClientSecret, oauthReady, own
  */
 export const OWNER_COOKIE = "owner";
 
-type Session = { email: string; rt?: string; at?: string; exp?: number; demo?: boolean; gmail?: boolean };
+type Session = { email: string; rt?: string; at?: string; exp?: number; demo?: boolean; gmail?: boolean; iat?: number };
 
 const key = () => createHash("sha256").update(`owner:${cookieSecret}`).digest();
 
@@ -44,7 +44,13 @@ export async function readSession(): Promise<Session | null> {
   const s = unseal<Session>((await cookies()).get(OWNER_COOKIE)?.value);
   if (!s) return null;
   if (s.demo) return isDemo ? s : null;
-  return ownerEmails.includes(s.email.toLowerCase()) ? s : null;
+  if (isDemo || !oauthReady) return null;
+  if (!ownerEmails.includes(s.email.toLowerCase())) return null;
+  // "Sign out everywhere" in the dashboard ends every session that started before it.
+  const { signedOutBefore } = await import("./brand");
+  const cutoff = await signedOutBefore().catch(() => 0);
+  if (cutoff && (s.iat ?? 0) < cutoff) return null;
+  return s;
 }
 
 /** For server components: who is signed in (no token refresh). */
@@ -54,7 +60,7 @@ export async function currentOwner() {
 }
 
 export async function writeSession(s: Session) {
-  (await cookies()).set(OWNER_COOKIE, seal(s), cookieOpts);
+  (await cookies()).set(OWNER_COOKIE, seal({ ...s, iat: s.iat ?? Date.now() }), cookieOpts);
 }
 
 export class NotOwner extends Error {}
