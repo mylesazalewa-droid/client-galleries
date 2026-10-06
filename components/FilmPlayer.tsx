@@ -1,13 +1,13 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import type { MediaItem } from "@/lib/types";
+import type { MediaItem, WatermarkSpec } from "@/lib/types";
 import { Watermark } from "./Brand";
 
 type Props = {
   item: MediaItem;
   autoPlay?: boolean;
   allowDownload: boolean;
-  watermark?: string;
+  watermark?: WatermarkSpec;
   /** called when the viewer picks another format (so download menus can follow) */
   onVersion?: (id: string) => void;
   /** website embed: no format bar, fills the frame */
@@ -60,7 +60,7 @@ export default function FilmPlayer({ item, autoPlay, allowDownload, watermark, o
             <track key={c.id} kind="captions" src={c.src} srcLang={c.lang ?? "en"} label={c.label} />
           ))}
         </video>
-        {watermark && <Watermark text={watermark} count={48} />}
+        {watermark && <Watermark spec={watermark} big />}
       </div>
       {!bare && (versions.length > 1 || item.captions?.length) && (
         <div className="film-bar">

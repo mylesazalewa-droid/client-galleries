@@ -92,6 +92,9 @@ function cleanSettings(s: GallerySettings): GallerySettings {
   if (s.clientEmail?.trim()) out.clientEmail = s.clientEmail.trim();
   if (s.remindUnpaid) out.remindUnpaid = true;
   if (s.remindClosing) out.remindClosing = true;
+  if (s.watermark) out.watermark = s.watermark;
+  if (s.watermarkLayout) out.watermarkLayout = s.watermarkLayout;
+  if (s.watermarkOpacity && Number(s.watermarkOpacity) > 0) out.watermarkOpacity = Math.min(0.8, Math.max(0.05, Number(s.watermarkOpacity)));
   return out;
 }
 

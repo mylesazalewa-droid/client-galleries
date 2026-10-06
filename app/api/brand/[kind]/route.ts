@@ -7,7 +7,13 @@ export const runtime = "nodejs";
 export async function GET(req: Request, ctx: { params: Promise<{ kind: string }> }) {
   const { kind } = await ctx.params;
   const { brand } = await loadBrand();
-  const id = kind === "logo" ? brand.logoId : kind === "landing" ? brand.landingId : kind === "watermark" ? brand.watermarkId : undefined;
+  const markId = new URL(req.url).searchParams.get("id");
+  const id =
+    kind === "logo" ? brand.logoId
+    : kind === "landing" ? brand.landingId
+    : kind === "watermark" ? brand.watermarkId
+    : kind === "mark" && markId && (brand.marks?.some((m) => m.id === markId) || brand.watermarkId === markId) ? markId
+    : undefined;
   if (!id) return new Response("Not found", { status: 404 });
   const url = new URL(req.url);
   const cache = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800";

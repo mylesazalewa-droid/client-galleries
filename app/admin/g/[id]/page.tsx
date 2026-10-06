@@ -8,6 +8,7 @@ import { getRecordById, isExpired } from "@/lib/galleries";
 import { currentOwner } from "@/lib/owner";
 import { stripeReady } from "@/lib/stripe";
 import { portalSlug } from "@/lib/portal";
+import { clampOpacity, defaultMarkId, getStudio, loadBrand, markOptions, type Brand } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Edit gallery" };
@@ -17,6 +18,7 @@ export default async function ManagePage({ params }: { params: Promise<{ id: str
   if (!owner) redirect("/admin");
   const g = await getRecordById((await params).id, true);
   if (!g) notFound();
+  const [{ brand }, { name: studioName }] = await Promise.all([loadBrand().catch(() => ({ brand: {} as Brand })), getStudio()]);
   const activity = (await readActivity().catch(() => []))
     .filter((r) => r.galleryId === g.id)
     .slice(0, 15)
@@ -42,6 +44,7 @@ export default async function ManagePage({ params }: { params: Promise<{ id: str
           clientLogo: g.clientLogoId ? `/api/client-logo/${g.slug}?v=${g.clientLogoId.slice(-8)}` : undefined,
           paid: !!g.paid,
           portal: g.settings.client?.trim() ? `/c/${portalSlug(g.settings.client)}` : undefined,
+          marks: { options: markOptions(brand, studioName), defaultId: defaultMarkId(brand), opacity: clampOpacity(brand.markOpacity, 0.3), layout: brand.markLayout ?? "tile" },
         }}
       />
     </AdminShell>

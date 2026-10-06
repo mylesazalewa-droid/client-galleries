@@ -19,7 +19,7 @@ export const PATCH = adminRoute(async (req: Request, ctx: Ctx) => {
     const title = typeof body.title === "string" ? body.title.trim().slice(0, 120) : g.title;
     if (title && title !== g.title) await renameFolder(token, id, title);
 
-    const keys: (keyof GallerySettings)[] = ["client", "date", "message", "password", "downloads", "cover", "hidden", "expires", "hold", "picks", "share", "license", "payUrl", "clientEmail", "remindUnpaid", "remindClosing"];
+    const keys: (keyof GallerySettings)[] = ["client", "date", "message", "password", "downloads", "cover", "hidden", "expires", "hold", "picks", "share", "license", "payUrl", "clientEmail", "remindUnpaid", "remindClosing", "watermark", "watermarkLayout", "watermarkOpacity"];
     const next: GallerySettings = { ...g.settings };
     for (const k of keys) if (k in body) (next as Record<string, unknown>)[k] = body[k];
     if (next.payUrl && !/^https:\/\/\S+$/i.test(String(next.payUrl).trim())) {

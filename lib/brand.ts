@@ -2,7 +2,7 @@ import "server-only";
 import { cacheTtl, isDemo, studio as envStudio } from "./config";
 import { BRAND_FOLDER, FOLDER_MIME, listChildren, resolveRoot } from "./galleries";
 import { drive } from "./google";
-import type { MediaKind, Studio } from "./types";
+import type { GallerySettings, MarkOption, MediaKind, Studio, WatermarkLayout, WatermarkSpec } from "./types";
 
 /** Saved as brand.json inside the CLIENTS folder. */
 export type Brand = {
@@ -13,7 +13,14 @@ export type Brand = {
   website?: string;
   accent?: string;
   logoId?: string;
+  /** older single uploaded watermark (kept working) */
   watermarkId?: string;
+  /** your watermark library (uploaded files in CLIENTS/_brand) */
+  marks?: { id: string; name: string }[];
+  /** default watermark id ("builtin", "text" or an uploaded mark) */
+  markDefault?: string;
+  markOpacity?: number;
+  markLayout?: WatermarkLayout;
   landingId?: string;
   landingKind?: MediaKind;
   /** sessions that started before this time (ms) are signed out */
@@ -68,7 +75,7 @@ export async function getStudio(): Promise<Studio> {
     email: brand.email || envStudio.email,
     accent: brand.accent || undefined,
     logo: brand.logoId ? `/api/brand/logo?v=${v(brand.logoId)}` : undefined,
-    watermark: brand.watermarkId ? `/api/brand/watermark?v=${v(brand.watermarkId)}` : "/watermark.png",
+    watermark: markOptions(brand, brand.name || envStudio.name).find((o) => o.id === defaultMarkId(brand))?.src ?? "/watermark.png",
     landing: brand.landingId
       ? brand.landingKind === "video"
         ? { kind: "video", src: `/api/brand/landing?stream=1&v=${v(brand.landingId)}`, poster: `/api/brand/landing?v=${v(brand.landingId)}` }
@@ -93,4 +100,37 @@ export function inkFor(hex?: string) {
 export async function signedOutBefore() {
   const { brand } = await loadBrand();
   return brand.signoutBefore ?? 0;
+}
+
+export const LAYOUTS: WatermarkLayout[] = ["tile", "center", "corner"];
+export const clampOpacity = (n: unknown, fallback = 0.3) => {
+  const v = Number(n);
+  return Number.isFinite(v) && v > 0 ? Math.min(0.8, Math.max(0.05, v)) : fallback;
+};
+
+/** Every watermark you can choose from. */
+export function markOptions(brand: Brand, studioName: string): MarkOption[] {
+  const uploaded = [...(brand.marks ?? [])];
+  if (brand.watermarkId && !uploaded.some((m) => m.id === brand.watermarkId)) uploaded.unshift({ id: brand.watermarkId, name: "Uploaded watermark" });
+  return [
+    { id: "builtin", name: "SOW Creative Studios mark", src: "/watermark.png" },
+    { id: "text", name: `Text: “${studioName}”`, text: studioName },
+    ...uploaded.map((m) => ({ id: m.id, name: m.name, src: `/api/brand/mark?id=${encodeURIComponent(m.id)}&v=${m.id.slice(-6)}`, uploaded: true })),
+  ];
+}
+
+export function defaultMarkId(brand: Brand) {
+  return brand.markDefault ?? (brand.watermarkId ? brand.watermarkId : "builtin");
+}
+
+/** The watermark for one gallery: its own choices, falling back to your defaults. */
+export function watermarkFor(brand: Brand, studioName: string, s: GallerySettings): WatermarkSpec {
+  const options = markOptions(brand, studioName);
+  const pick = options.find((o) => o.id === (s.watermark || defaultMarkId(brand))) ?? options[0];
+  return {
+    src: pick.src,
+    text: pick.text,
+    opacity: clampOpacity(s.watermarkOpacity, clampOpacity(brand.markOpacity, 0.3)),
+    layout: s.watermarkLayout && LAYOUTS.includes(s.watermarkLayout) ? s.watermarkLayout : brand.markLayout && LAYOUTS.includes(brand.markLayout) ? brand.markLayout : "tile",
+  };
 }

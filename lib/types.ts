@@ -69,6 +69,11 @@ export type GallerySettings = {
   /** automatic email reminders */
   remindUnpaid?: boolean;
   remindClosing?: boolean;
+  /** watermark for this gallery: a MarkOption id ("" = your default) */
+  watermark?: string;
+  watermarkLayout?: WatermarkLayout;
+  /** 0.05–0.8; empty = your default */
+  watermarkOpacity?: number;
 };
 
 export type PayPart = { id: string; url: string; amount: number; label: string };
@@ -107,6 +112,8 @@ export type Gallery = GallerySummary & {
   payParts?: { label: string; amount: string; paid: boolean }[];
   /** URL of the client's logo for "Prepared for" */
   clientLogo?: string;
+  /** set while on hold */
+  watermark?: WatermarkSpec;
 };
 
 export type Studio = {
@@ -123,3 +130,9 @@ export type Studio = {
   /** URL + kind of the landing page background, if any */
   landing?: { src: string; poster?: string; kind: MediaKind };
 };
+
+export type WatermarkLayout = "tile" | "center" | "corner";
+/** How previews are watermarked while a gallery is held for payment. */
+export type WatermarkSpec = { src?: string; text?: string; opacity: number; layout: WatermarkLayout };
+/** A watermark you can pick: the built-in mark, your studio name as text, or one you uploaded. */
+export type MarkOption = { id: string; name: string; src?: string; text?: string; uploaded?: boolean };

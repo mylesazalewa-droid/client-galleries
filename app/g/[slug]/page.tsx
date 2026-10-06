@@ -4,7 +4,7 @@ import Closed from "@/components/Closed";
 import GalleryView from "@/components/GalleryView";
 import LockScreen from "@/components/LockScreen";
 import { canView } from "@/lib/access";
-import { getStudio } from "@/lib/brand";
+import { getStudio, loadBrand, watermarkFor, type Brand } from "@/lib/brand";
 import { formatDate } from "@/lib/format";
 import { getRecord, isExpired, loadAll, toGallery } from "@/lib/galleries";
 import { currentOwner } from "@/lib/owner";
@@ -42,7 +42,7 @@ export default async function GalleryPage({ params, searchParams }: Props) {
     g = (await loadAll(true)).find((r) => r.slug === slug) ?? g;
   }
   if (!g) notFound();
-  const studio = await getStudio();
+  const [studio, { brand }] = await Promise.all([getStudio(), loadBrand().catch(() => ({ brand: {} as Brand }))]);
 
   if (!owner) {
     if (isExpired(g.settings)) return <Closed studio={studio} title={g.title} />;
@@ -62,7 +62,7 @@ export default async function GalleryPage({ params, searchParams }: Props) {
 
   return (
     <GalleryView
-      gallery={toGallery(g, owner)}
+      gallery={{ ...toGallery(g, owner), watermark: g.settings.hold ? watermarkFor(brand, studio.name, g.settings) : undefined }}
       justPaid={paid === "1" && !g.settings.hold ? true : paid === "1" && g.paidLinks?.length ? "partial" : paid === "pending" ? false : undefined}
       studio={studio}
       owner={owner ? { clientView: `/g/${g.slug}?as=client`, notes } : undefined}

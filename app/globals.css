@@ -645,3 +645,41 @@ select.move:hover { color: var(--text); }
 .access-list li { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; }
 .access-list .dot { width: 8px; height: 8px; border-radius: 50%; background: #3fae6b; }
 .access-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 8px; }
+
+/* ---------- watermark (layouts) ---------- */
+.wm2 { position: absolute; z-index: 1; pointer-events: none; user-select: none; filter: drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
+.wm2.big { z-index: 2; }
+.wm2.wm-tile { inset: -40%; background-repeat: repeat; background-size: 120px auto; background-position: center; transform: rotate(-18deg); }
+.wm2.wm-tile.big { inset: -60%; background-size: clamp(150px, 16vw, 230px) auto; }
+.wm2.wm-center { inset: 0; display: flex; align-items: center; justify-content: center; }
+.wm2.wm-center img { width: 46%; max-width: 520px; height: auto; }
+.wm2.wm-corner { inset: 0; display: flex; align-items: flex-end; justify-content: flex-end; padding: 0 3.5% 4% 0; box-sizing: border-box; }
+.wm2.wm-corner img { width: clamp(46px, 18%, 170px); height: auto; }
+.wm2.txt { color: #fff; font-family: "Instrument Serif", Georgia, serif; white-space: nowrap; }
+.wm2.txt.wm-tile { display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 56px 60px; overflow: hidden; }
+.wm2.txt.wm-tile span { font-size: clamp(14px, 1.8vw, 21px); }
+.wm2.txt.wm-tile.big { gap: 70px 80px; }
+.wm2.txt.wm-tile.big span { font-size: clamp(20px, 3vw, 36px); }
+.wm2.txt.wm-center span { font-size: clamp(22px, 5vw, 64px); }
+.wm2.txt.wm-corner span { font-size: clamp(13px, 1.6vw, 22px); }
+.wm-stage { position: relative; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; margin-bottom: 14px; background: #222; }
+.wm-stage-img { position: absolute; inset: 0; background: radial-gradient(circle at 30% 30%, #e8d3b5 0 8%, transparent 9%), linear-gradient(180deg, #8aa1b6 0%, #c9b79c 55%, #5b6b52 56%, #2e3a2c 100%); }
+.wm-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.wm-opt { position: relative; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); overflow: hidden; }
+.wm-opt > button[role="radio"], .wm-opt.add { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 8px; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: left; font: inherit; }
+.wm-opt.add { border: 1px dashed var(--line); }
+.wm-opt.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.wm-thumb { display: grid; place-items: center; height: 58px; border-radius: 8px; background: linear-gradient(135deg, #5a6b7d, #2a3340); color: #fff; font-size: 22px; }
+.wm-thumb img { max-height: 46px; max-width: 80%; object-fit: contain; }
+.wm-name { font-size: 12.5px; line-height: 1.3; }
+.wm-name em { color: var(--accent); font-style: normal; }
+.wm-del { font-size: 12px; padding: 0 8px 8px; align-self: flex-start; }
+.seg { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--surface-2); gap: 2px; }
+.seg button { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13.5px; padding: 6px 14px; border-radius: 999px; cursor: pointer; }
+.seg button.on { background: var(--bg); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+.range { width: 100%; accent-color: var(--accent); padding: 0 !important; border: 0 !important; background: transparent !important; }
+.range-ends { display: flex !important; justify-content: space-between; margin: 0 !important; }
+.range-ends small { color: var(--muted); font-size: 12px; }
+.wm-pct { color: var(--text); font-weight: 600; margin-left: 6px; }
+.field select { width: 100%; border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: 12px; padding: 11px 14px; font: inherit; outline: none; appearance: none; -webkit-appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 18px) 52%, calc(100% - 13px) 52%; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 34px; }
+.wm-gal { margin: 2px 0 10px 28px; padding-left: 12px; border-left: 2px solid var(--line); }

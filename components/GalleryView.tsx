@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Gallery, MediaItem, Section, Studio } from "@/lib/types";
+import type { Gallery, MediaItem, Section, Studio, WatermarkSpec } from "@/lib/types";
 import { formatDate, formatDuration, plural } from "@/lib/format";
 import { Brand, Watermark } from "./Brand";
 import Lightbox from "./Lightbox";
@@ -280,7 +280,7 @@ export default function GalleryView({ gallery, studio, owner, justPaid }: Props)
                     delay={Math.min(tileIndex++, 14) * 35}
                     fav={favs[item.id]}
                     picks={picksOn}
-                    watermark={gallery.hold ? studio.watermark ?? studio.name : undefined}
+                    watermark={gallery.hold ? gallery.watermark : undefined}
                     onOpen={() => openItem(item)}
                     onFav={() => toggleFav(item.id)}
                     canDownload={gallery.allowDownload}
@@ -332,7 +332,7 @@ export default function GalleryView({ gallery, studio, owner, justPaid }: Props)
           onNote={setNote}
           allowDownload={gallery.allowDownload}
           picks={picksOn}
-          watermark={gallery.hold ? studio.watermark ?? studio.name : undefined}
+          watermark={gallery.hold ? gallery.watermark : undefined}
           shareSlug={gallery.share ? gallery.slug : undefined}
           shareKeys={gallery.shareKeys}
         />
@@ -359,7 +359,7 @@ function Tab({ on, onClick, n, icon, children }: { on: boolean; onClick: () => v
 }
 
 type TileProps = {
-  item: MediaItem; delay: number; fav?: Fav; picks: boolean; watermark?: string;
+  item: MediaItem; delay: number; fav?: Fav; picks: boolean; watermark?: WatermarkSpec;
   onOpen: () => void; onFav: () => void; canDownload: boolean;
 };
 
@@ -403,7 +403,7 @@ function Tile({ item, delay, fav, picks, watermark, onOpen, onFav, canDownload }
         ref={(el) => { if (el?.complete && el.naturalWidth && !loaded) setLoaded(true); }}
       />
       {hover && item.src && <video className="peek" src={item.src} muted autoPlay loop playsInline preload="auto" />}
-      {watermark && <Watermark text={watermark} />}
+      {watermark && <Watermark spec={watermark} />}
       <span className="shade" />
       {item.kind === "video" && (
         <>

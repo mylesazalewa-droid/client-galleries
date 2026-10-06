@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatDuration, plural } from "@/lib/format";
-import type { GallerySettings, MediaItem, Section } from "@/lib/types";
+import type { GallerySettings, MarkOption, MediaItem, Section, WatermarkLayout } from "@/lib/types";
 import { Check, Close, Download, Play } from "../icons";
 import CopyLink from "./CopyLink";
 
@@ -19,6 +19,7 @@ type G = {
   clientLogo?: string;
   paid?: boolean;
   portal?: string;
+  marks?: { options: MarkOption[]; defaultId: string; opacity: number; layout: string };
 };
 
 const LICENSES: { label: string; text: (client: string) => string }[] = [
@@ -459,6 +460,9 @@ function Settings({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings> & 
     hold: !!g.settings.hold,
     picks: !!g.settings.picks,
     share: g.settings.share !== false,
+    watermark: g.settings.watermark ?? "",
+    watermarkLayout: (g.settings.watermarkLayout ?? "") as WatermarkLayout | "",
+    watermarkOpacity: g.settings.watermarkOpacity ? String(Math.round(g.settings.watermarkOpacity * 100)) : "",
     license: g.settings.license ?? "",
   });
   const [busy, setBusy] = useState(false);
@@ -468,7 +472,11 @@ function Settings({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings> & 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    await onSave(f); // an empty date clears the expiry
+    await onSave({
+      ...f,
+      watermarkLayout: f.watermarkLayout || undefined,
+      watermarkOpacity: f.watermarkOpacity ? Number(f.watermarkOpacity) / 100 : undefined,
+    } as Partial<GallerySettings> & { title?: string }); // an empty date clears the expiry
     setBusy(false);
   }
 
@@ -489,6 +497,32 @@ function Settings({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings> & 
       <label className="field"><span>Welcome message</span><textarea value={f.message} onChange={set("message")} /></label>
       <label className="check"><input type="checkbox" checked={f.downloads} onChange={set("downloads")} /> Allow downloads</label>
       <label className="check"><input type="checkbox" checked={f.hold} onChange={set("hold")} /> Hold downloads until paid (watermarked previews)</label>
+      {f.hold && g.marks && (
+        <div className="wm-gal">
+          <label className="field"><span>Watermark for this gallery</span>
+            <select value={f.watermark} onChange={(e) => setF({ ...f, watermark: e.target.value })}>
+              <option value="">Default — {g.marks.options.find((o) => o.id === g.marks!.defaultId)?.name ?? "your watermark"}</option>
+              {g.marks.options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+          </label>
+          <div className="field-row">
+            <label className="field"><span>Layout</span>
+              <select value={f.watermarkLayout} onChange={(e) => setF({ ...f, watermarkLayout: e.target.value as WatermarkLayout | "" })}>
+                <option value="">Default</option>
+                <option value="tile">Tiled</option>
+                <option value="center">Center</option>
+                <option value="corner">Corner</option>
+              </select>
+            </label>
+            <label className="field"><span>Opacity</span>
+              <select value={f.watermarkOpacity} onChange={(e) => setF({ ...f, watermarkOpacity: e.target.value })}>
+                <option value="">Default ({Math.round(g.marks.opacity * 100)}%)</option>
+                {[10, 15, 20, 30, 40, 50, 65].map((n) => <option key={n} value={String(n)}>{n}%</option>)}
+              </select>
+            </label>
+          </div>
+        </div>
+      )}
       <label className="check"><input type="checkbox" checked={f.picks} onChange={set("picks")} /> Let clients heart favorites and send picks</label>
       <label className="check"><input type="checkbox" checked={f.share} onChange={set("share")} /> Let clients share a link to a single film</label>
       <label className="check"><input type="checkbox" checked={f.hidden} onChange={set("hidden")} /> Draft (hide from client)</label>

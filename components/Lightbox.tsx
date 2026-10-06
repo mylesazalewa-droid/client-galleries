@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { MediaItem } from "@/lib/types";
+import type { MediaItem, WatermarkSpec } from "@/lib/types";
 import { plural } from "@/lib/format";
 import { Close, Heart, Left, Note, Right, Share } from "./icons";
 import { Watermark } from "./Brand";
@@ -22,7 +22,7 @@ type Props = {
   /** favorites and notes */
   picks: boolean;
   /** studio name to overlay while a payment hold is on */
-  watermark?: string;
+  watermark?: WatermarkSpec;
   /** gallery slug when single films can be shared/embedded */
   shareSlug?: string;
   shareKeys?: Record<string, { k: string; d?: string }>;
@@ -304,7 +304,7 @@ export default function Lightbox({ items, index, onIndex, onClose, favs, onToggl
                 <FilmPlayer item={item} autoPlay allowDownload={allowDownload} watermark={watermark} />
               </div>
             )}
-            {watermark && item.kind === "photo" && <Watermark text={watermark} count={48} />}
+            {watermark && item.kind === "photo" && <Watermark spec={watermark} big />}
           </div>
         </div>
         <button className="lb-arrow prev" onClick={() => go(-1)} disabled={index === 0} aria-label="Previous"><Left /></button>

@@ -2,7 +2,8 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import type { Brand } from "@/lib/brand";
-import type { Studio } from "@/lib/types";
+import type { MarkOption, Studio, WatermarkLayout } from "@/lib/types";
+import WatermarkPanel from "./WatermarkPanel";
 
 const PRESETS = ["#e9b07b", "#d4a24c", "#8fb8a8", "#9db4e0", "#c99bd6", "#e7e2d8"];
 
@@ -10,7 +11,10 @@ async function api(url: string, init: RequestInit) {
   return fetch(url, { ...init, headers: { "Content-Type": "application/json" } }).then((r) => r.json()).catch(() => ({ ok: false, error: "Couldn't connect. Try again." }));
 }
 
-export default function BrandEditor({ brand, studio, demo }: { brand: Brand; studio: Studio; demo: boolean }) {
+export default function BrandEditor({ brand, studio, demo, marks }: {
+  brand: Brand; studio: Studio; demo: boolean;
+  marks: { options: MarkOption[]; defaultId: string; opacity: number; layout: WatermarkLayout };
+}) {
   const router = useRouter();
   const [f, setF] = useState({
     name: brand.name ?? studio.name,
@@ -125,16 +129,7 @@ export default function BrandEditor({ brand, studio, demo }: { brand: Brand; stu
           >
             {logo ? <div className="logo-prev"><img src={logo} alt="Logo" /></div> : <div className="slot-empty">No logo — your studio name is shown instead</div>}
           </MediaSlot>
-          <MediaSlot
-            title="Watermark"
-            hint="Tiled over previews while a gallery is held for payment. A white mark on a transparent PNG works best."
-            accept="image/png,image/webp"
-            busy={busy === "watermark"}
-            onPick={(file) => upload("watermark", file)}
-            onRemove={mark && mark !== "/watermark.png" ? () => remove("watermark") : undefined}
-          >
-            <div className="wm-prev"><span className="wm-img" style={{ backgroundImage: `url("${mark}")` }} /></div>
-          </MediaSlot>
+          <WatermarkPanel options={marks.options} defaultId={marks.defaultId} opacity={marks.opacity} layout={marks.layout} demo={demo} say={say} />
           <MediaSlot
             title="Landing background"
             hint="A short, muted reel (MP4 under ~30 MB) or a wide photo. It fills the frame on your landing page."
