@@ -148,7 +148,11 @@ export function toGallery(g: GalleryRecord, asOwner = false): Gallery {
     share: g.settings.share !== false && !hold,
     shareKeys:
       g.settings.share !== false && !hold
-        ? Object.fromEntries(g.items.filter((i) => i.kind === "video").map((i) => [i.id, fileKey(g.slug, i.id)]))
+        ? Object.fromEntries(
+            g.items
+              .filter((i) => i.kind === "video")
+              .map((i) => [i.id, { k: fileKey(g.slug, i.id), d: g.settings.downloads !== false ? fileKey(g.slug, i.id, true) : undefined }]),
+          )
         : undefined,
     license: g.settings.license,
     payUrl: hold ? payLink(g) : undefined,

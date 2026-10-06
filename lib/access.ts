@@ -43,8 +43,11 @@ export async function viewerState(g: GalleryRecord) {
  * Access check for file routes: the gallery password cookie, the owner, or a valid share key
  * for this exact file (single-film links and website embeds).
  */
-export async function canAccessFile(g: GalleryRecord, fileId: string, req: Request) {
+export async function canAccessFile(g: GalleryRecord, fileId: string, req: Request, opts: { download?: boolean } = {}) {
   if (await canView(g)) return true;
   const { shareAllowed, validKey } = await import("./share");
-  return shareAllowed(g) && validKey(g.slug, fileId, new URL(req.url).searchParams.get("k"));
+  if (!shareAllowed(g)) return false;
+  const q = new URL(req.url).searchParams;
+  const canDl = validKey(g.slug, fileId, q.get("d"), true);
+  return opts.download ? canDl : canDl || validKey(g.slug, fileId, q.get("k"));
 }

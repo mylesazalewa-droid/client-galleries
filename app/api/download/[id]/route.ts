@@ -13,7 +13,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   const url = new URL(req.url);
   const found = await findItem(url.searchParams.get("g") ?? "", id);
   if (!found) return new Response("Not found", { status: 404 });
-  if (!(await canAccessFile(found.gallery, id, req))) return new Response("Locked", { status: 401 });
+  if (!(await canAccessFile(found.gallery, id, req, { download: true }))) return new Response("Locked", { status: 401 });
   const v = await viewerState(found.gallery);
   if (v.expired) return new Response("This gallery has closed", { status: 410 });
   if (!v.canDownload) return new Response("Downloads aren't available for this gallery yet", { status: 403 });

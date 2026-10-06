@@ -25,7 +25,7 @@ type Props = {
   watermark?: string;
   /** gallery slug when single films can be shared/embedded */
   shareSlug?: string;
-  shareKeys?: Record<string, string>;
+  shareKeys?: Record<string, { k: string; d?: string }>;
 };
 
 type Pt = { x: number; y: number };
@@ -329,8 +329,9 @@ export default function Lightbox({ items, index, onIndex, onClose, favs, onToggl
       {sharing && shareSlug && (
         <ShareDialog
           title={item.title ?? item.name}
-          path={`/f/${shareSlug}/${encodeURIComponent(item.id)}${shareKeys?.[item.id] ? `?k=${shareKeys[item.id]}` : ""}`}
-          embedPath={`/embed/${shareSlug}/${encodeURIComponent(item.id)}${shareKeys?.[item.id] ? `?k=${shareKeys[item.id]}` : ""}`}
+          path={`/f/${shareSlug}/${encodeURIComponent(item.id)}${shareKeys?.[item.id] ? `?k=${shareKeys[item.id].k}` : ""}`}
+          embedPath={`/embed/${shareSlug}/${encodeURIComponent(item.id)}${shareKeys?.[item.id] ? `?k=${shareKeys[item.id].k}` : ""}`}
+          downloadKey={allowDownload ? shareKeys?.[item.id]?.d : undefined}
           onClose={() => setSharing(false)}
         />
       )}

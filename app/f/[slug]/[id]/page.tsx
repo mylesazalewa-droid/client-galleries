@@ -10,12 +10,12 @@ import { formatDate, formatDuration } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-type Props = { params: Promise<{ slug: string; id: string }>; searchParams: Promise<{ k?: string }> };
+type Props = { params: Promise<{ slug: string; id: string }>; searchParams: Promise<{ k?: string; d?: string }> };
 
 export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const { slug, id } = await params;
-  const { k } = await searchParams;
-  const r = await loadFilm(slug, id, k ?? null);
+  const { k, d } = await searchParams;
+  const r = await loadFilm(slug, id, k ?? null, d ?? null);
   if (!r.ok) return { title: r.g?.title };
   const title = r.item.title ?? r.item.name.replace(/\.[^.]+$/, "");
   const description = r.g.settings.client ? `Prepared for ${r.g.settings.client}` : r.g.title;
@@ -30,8 +30,8 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 
 export default async function FilmPage({ params, searchParams }: Props) {
   const { slug, id } = await params;
-  const { k } = await searchParams;
-  const [r, studio] = await Promise.all([loadFilm(slug, id, k ?? null), getStudio()]);
+  const { k, d } = await searchParams;
+  const [r, studio] = await Promise.all([loadFilm(slug, id, k ?? null, d ?? null), getStudio()]);
   if (!r.ok) {
     if (r.reason === "closed" && r.g) return <Closed studio={studio} title={r.g.title} />;
     if (r.reason === "private" && r.g) {

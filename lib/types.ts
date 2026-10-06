@@ -84,7 +84,7 @@ export type Gallery = GallerySummary & {
   zip: string;
   share: boolean;
   /** signed keys for sharing single films (video id → key), when sharing is on */
-  shareKeys?: Record<string, string>;
+  shareKeys?: Record<string, { k: string; d?: string }>;
   license?: string;
   /** link to pay, while on hold */
   payUrl?: string;

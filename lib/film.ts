@@ -11,7 +11,7 @@ export type FilmResult =
   | { ok: false; g?: GalleryRecord; reason: "missing" | "closed" | "private" };
 
 /** Loads one film for the single-film page and website embeds, checking the share key. */
-export async function loadFilm(slug: string, id: string, key: string | null): Promise<FilmResult> {
+export async function loadFilm(slug: string, id: string, key: string | null, downloadKey: string | null = null): Promise<FilmResult> {
   if (id.includes("%")) {
     try { id = decodeURIComponent(id); } catch {}
   }
@@ -20,17 +20,22 @@ export async function loadFilm(slug: string, id: string, key: string | null): Pr
   if (!g) return { ok: false, reason: "missing" };
   const raw = g.items.find((i) => i.id === id && i.kind === "video");
   if (!raw) return { ok: false, g, reason: "missing" };
+  const dlLink = validKey(g.slug, id, downloadKey, true);
+  let member = owner;
   if (!owner) {
     if (isExpired(g.settings)) return { ok: false, g, reason: "closed" };
-    const allowed = shareAllowed(g) && (validKey(g.slug, id, key) || (await canView(g, { ignoreOwner: true })));
+    member = await canView(g, { ignoreOwner: true });
+    const allowed = shareAllowed(g) && (validKey(g.slug, id, key) || dlLink || member);
     if (!allowed) return { ok: false, g, reason: "private" };
   }
+  // A shared link offers downloads only when the sender turned "Allow downloads" on.
+  const canDownload = owner || (g.settings.downloads !== false && !g.settings.hold && dlLink);
   return {
     ok: true,
     g,
     owner,
-    item: signItem(g.slug, raw),
-    canDownload: owner || (g.settings.downloads !== false && !g.settings.hold),
+    item: signItem(g.slug, raw, canDownload),
+    canDownload,
     clientLogo: toGallery(g).clientLogo,
   };
 }
