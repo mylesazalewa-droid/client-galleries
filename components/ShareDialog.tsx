@@ -33,22 +33,26 @@ export default function ShareDialog({ title, path, embedPath, downloadKey, onClo
           <button className="icon-btn" onClick={onClose} aria-label="Close"><Close /></button>
         </div>
         <p className="sub">Anyone with this link can watch {title}{allowDl ? " and download it" : ""}. They won&apos;t see the rest of the gallery.</p>
-        {downloadKey && (
-          <label className="switch-row">
-            <span>
-              <b>Allow downloads</b>
-              <small>{allowDl ? "People with the link can download the film." : "View only. The link can't be used to download."}</small>
-            </span>
-            <input type="checkbox" role="switch" className="switch" checked={allowDl} onChange={(e) => setAllowDl(e.target.checked)} />
-          </label>
-        )}
+        <label className={`switch-row ${downloadKey ? "" : "disabled"}`}>
+          <span>
+            <b>Allow downloads</b>
+            <small>
+              {!downloadKey
+                ? "Downloads are turned off for this gallery, so shared links are view only."
+                : allowDl
+                  ? "People with the link can download the film."
+                  : "View only. The link can't be used to download."}
+            </small>
+          </span>
+          <input type="checkbox" role="switch" className="switch" disabled={!downloadKey} checked={allowDl && !!downloadKey} onChange={(e) => setAllowDl(e.target.checked)} />
+        </label>
         <label className="field"><span>Link</span>
           <div className="copy-row">
             <input readOnly value={link} onFocus={(e) => e.target.select()} />
             <button className="btn primary" onClick={() => copy("link", link)}>{copied === "link" ? <><Check /> Copied</> : "Copy"}</button>
           </div>
         </label>
-        <label className="field"><span>Embed on a website{downloadKey ? " (always view only)" : ""}</span>
+        <label className="field"><span>Embed on a website (always view only)</span>
           <textarea readOnly value={embed} rows={4} onFocus={(e) => e.target.select()} className="code-box" />
         </label>
         <div className="actions">
