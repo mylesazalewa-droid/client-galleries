@@ -71,7 +71,7 @@ Changing the password signs out anyone who unlocked the old one.
 ### 2. Owner sign-in (OAuth client)
 1. **APIs & Services → OAuth consent screen**: User type **External**, app name e.g. "Client Galleries", your email as support + developer contact. Add yourself as a test user, then click **Publish app** (drive.file is a non-sensitive scope, so no Google review is needed).
 2. **APIs & Services → Credentials → Create credentials → OAuth client ID → Web application.**
-3. Authorized redirect URI: `https://client-galleries.vercel.app/api/auth/callback` (and `http://localhost:3000/api/auth/callback` for local testing).
+3. Authorized redirect URIs: `https://galleries.sowcreativestudios.com/api/auth/callback` (and the old `https://client-galleries.vercel.app/api/auth/callback`) (and `http://localhost:3000/api/auth/callback` for local testing).
 4. Copy the **Client ID** and **Client secret**.
 
 The **CLIENTS** folder is created and shared with the service account automatically the first time you make a gallery in the dashboard.
@@ -95,6 +95,7 @@ Copy `.env.example` to `.env.local` and fill in:
 | `GALLERY_SECRET` | Any long random string |
 | `STUDIO_NAME`, `STUDIO_TAGLINE`, `STUDIO_URL`, `STUDIO_EMAIL` | Your branding |
 | `STRIPE_SECRET_KEY` | Optional. Restricted Stripe key (Checkout Sessions: Read) for pay-to-unlock |
+| `SITE_URL` | The main address, e.g. `https://galleries.sowcreativestudios.com` (used for sign-in, links, emails, previews) |
 | `SHOW_INDEX` | `true` to list unlocked galleries on the home page (off by default) |
 | `RESEND_API_KEY`, `NOTIFY_EMAIL` | Optional email alert via resend.com instead of Sheets notifications |
 
