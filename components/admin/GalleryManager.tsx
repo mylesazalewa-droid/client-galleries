@@ -38,6 +38,15 @@ type Job = { key: string; name: string; size: number; folderId?: string; progres
 
 const CONCURRENCY = 3;
 
+type Tab = "files" | "review" | "payment" | "settings" | "activity";
+const TABS: { id: Tab; label: string }[] = [
+  { id: "files", label: "Files" },
+  { id: "review", label: "Review" },
+  { id: "payment", label: "Payment & email" },
+  { id: "settings", label: "Settings" },
+  { id: "activity", label: "Activity" },
+];
+
 async function api(url: string, init: RequestInit = {}) {
   return fetch(url, { ...init, headers: { "Content-Type": "application/json", ...init.headers } })
     .then((r) => r.json())
@@ -50,6 +59,12 @@ export default function GalleryManager({ gallery, demo, activity, stripe, gmail 
   const [target, setTarget] = useState(""); // "" = main area, otherwise a section id
   const [toast, setToast] = useState("");
   const [formKey, setFormKey] = useState(0); // remounts the settings form after payment changes
+  const [tab, setTab] = useState<Tab>("files");
+  useEffect(() => {
+    const h = location.hash.slice(1) as Tab;
+    if (TABS.some((t) => t.id === h)) setTab(h);
+  }, []);
+  const pick = (t: Tab) => { setTab(t); history.replaceState(null, "", t === "files" ? location.pathname : `#${t}`); };
   const say = useCallback((t: string) => { setToast(t); setTimeout(() => setToast(""), 3200); }, []);
 
   const media = [...(g.cover && !g.items.some((i) => i.id === g.cover!.id) ? [g.cover] : []), ...g.items];
@@ -177,9 +192,6 @@ export default function GalleryManager({ gallery, demo, activity, stripe, gmail 
         </div>
         <div className="mgr-share">
           {g.settings.hold && <button className="btn" onClick={() => markPaid()}>Mark as paid</button>}
-          {g.settings.mode === "review"
-            ? <button className="btn" onClick={() => save({ mode: "" } as unknown as Partial<GallerySettings>, "Switched to delivery. Clients now see the download page.")}>Switch to delivery</button>
-            : <button className="btn" onClick={() => save({ mode: "review" }, "Review mode on. Share the same link for feedback.")}>Send for review</button>}
           <a className="btn" href={`${link}?as=client`} target="_blank" rel="noreferrer">View as client ↗</a>
           <CopyLink path={link} />
           {g.portal && <CopyLink path={g.portal} label="Copy client portal" />}
@@ -187,8 +199,19 @@ export default function GalleryManager({ gallery, demo, activity, stripe, gmail 
         </div>
       </section>
 
-      <div className="mgr-cols">
-        <div className="mgr-main">
+      <nav className="mgr-tabs" role="tablist">
+        {TABS.map((t) => (
+          <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? "on" : ""} onClick={() => pick(t.id)}>
+            {t.label}
+            {t.id === "files" && <span className="count">{media.length}</span>}
+            {t.id === "review" && g.settings.mode === "review" && <span className="count">On</span>}
+            {t.id === "payment" && g.settings.hold && <span className="count">Due</span>}
+          </button>
+        ))}
+      </nav>
+
+      {tab === "files" && (
+        <div className="mgr-tab-body wide">
           <SectionBar sections={g.sections} target={target} onTarget={setTarget} onAdd={addSection} demo={demo} />
           <Uploader
             galleryId={g.id}
@@ -240,17 +263,22 @@ export default function GalleryManager({ gallery, demo, activity, stripe, gmail 
             </div>
           )}
         </div>
-
-        <aside className="mgr-side">
-          <Review g={g} onSave={save} />
+      )}
+      {tab === "review" && <div className="mgr-tab-body"><Review g={g} onSave={save} /></div>}
+      {tab === "payment" && (
+        <div className="mgr-tab-body">
           <Payment g={g} stripe={stripe} demo={demo} say={say} onChange={paymentChanged} onMarkPaid={markPaid} onSave={save} />
           <Email g={g} gmail={gmail} demo={demo} say={say} onSave={async (p, m) => { const ok = await save(p, m); setFormKey((k) => k + 1); return ok; }} />
+        </div>
+      )}
+      {tab === "settings" && (
+        <div className="mgr-tab-body">
           <Settings key={formKey} g={g} onSave={save} />
           <ClientLogo g={g} demo={demo} say={say} onChange={(clientLogo) => setG((cur) => ({ ...cur, clientLogo }))} />
-          <Activity items={activity} />
           <Danger g={g} demo={demo} say={say} onDeleted={() => { router.push("/admin"); router.refresh(); }} />
-        </aside>
-      </div>
+        </div>
+      )}
+      {tab === "activity" && <div className="mgr-tab-body"><Activity items={activity} /></div>}
 
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>
@@ -997,13 +1025,12 @@ function Review({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings>, msg
         <p className="hint">Loading feedback…</p>
       ) : open.length ? (
         <ul className="rv-mini">
-          {open.slice(0, 8).map((n) => (
+          {open.map((n) => (
             <li key={n.id}>
               <span className="rv-mini-file">{nameOf(n.fileId)}{n.t !== undefined ? ` · ${formatDuration(n.t) || "0:00"}` : n.x !== undefined ? " · pin" : ""}</span>
               <span className="rv-mini-text"><b>{n.author}:</b> {n.text}</span>
             </li>
           ))}
-          {open.length > 8 && <li className="hint" style={{ margin: 0 }}>+{open.length - 8} more</li>}
         </ul>
       ) : (
         <p className="hint">{fb.notes.length ? "Every note is resolved." : "No notes yet. Share the gallery link and clients will see the review page."}</p>

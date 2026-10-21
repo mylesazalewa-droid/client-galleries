@@ -15,7 +15,7 @@ export default async function BrandPage() {
   if (!owner) redirect("/admin");
   const [{ brand }, studio] = await Promise.all([loadBrand(true).catch(() => ({ brand: {} as Brand })), getStudio()]);
   return (
-    <AdminShell studio={envStudio} email={owner.email} demo={owner.demo} back>
+    <AdminShell studio={envStudio} email={owner.email} demo={owner.demo}>
       <BrandEditor
         demo={owner.demo}
         brand={brand}

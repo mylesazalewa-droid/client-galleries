@@ -23,7 +23,7 @@ export default async function BrandsPage() {
     galleries: galleries.filter((g) => g.settings.brandId === p.id).length,
   }));
   return (
-    <AdminShell studio={envStudio} email={owner.email} demo={owner.demo} back>
+    <AdminShell studio={envStudio} email={owner.email} demo={owner.demo}>
       <BrandList profiles={profiles} demo={owner.demo} />
     </AdminShell>
   );

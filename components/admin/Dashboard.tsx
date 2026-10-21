@@ -76,40 +76,9 @@ export default function Dashboard({ galleries, demo, loadError, rootMissing, act
         </div>
         <div className="admin-head-actions">
           {activityUrl && <a className="btn" href={activityUrl} target="_blank" rel="noreferrer">Activity sheet ↗</a>}
-          <Link className="btn" href="/admin/brand">Branding</Link>
-          <Link className="btn" href="/admin/brands">Client brands</Link>
           <button className="btn primary" onClick={() => setCreating(true)}>+ New gallery</button>
         </div>
       </div>
-
-      {(galleries.some((g) => g.due && g.hold) || payments.length > 0) && (
-        <section className="pay-overview">
-          <div>
-            <div className="eyebrow">Outstanding</div>
-            {galleries.filter((g) => g.due && g.hold).length ? (
-              <ul>
-                {galleries.filter((g) => g.due && g.hold).map((g) => (
-                  <li key={g.id}><Link href={`/admin/g/${g.id}`}>{g.title}</Link><b>{g.due}</b></li>
-                ))}
-              </ul>
-            ) : <p className="hint">Nothing waiting. 🎉</p>}
-          </div>
-          <div>
-            <div className="eyebrow">Recent payments</div>
-            {payments.length ? (
-              <ul>
-                {payments.map((p, i) => (
-                  <li key={i}>
-                    <Link href={`/admin/g/${p.galleryId}`}>{p.gallery}</Link>
-                    <b>{p.detail.split(" · ")[0] || p.event}</b>
-                    <span>{p.event === "Marked paid" ? "marked by you" : "Stripe"} · {p.time}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : <p className="hint">None yet.</p>}
-          </div>
-        </section>
-      )}
 
       {loadError && <p className="error">{loadError}</p>}
       {rootMissing && (

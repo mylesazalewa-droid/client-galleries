@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Studio } from "@/lib/types";
 import ThemeToggle from "../ThemeToggle";
 import { Left } from "../icons";
+import AdminNav from "./AdminNav";
 
 export default function AdminShell({ studio, email, demo, back, children }: { studio: Studio; email: string; demo: boolean; back?: boolean; children: React.ReactNode }) {
   return (
@@ -12,8 +13,8 @@ export default function AdminShell({ studio, email, demo, back, children }: { st
             <Link href="/admin" className="icon-btn" aria-label="All galleries"><Left /></Link>
           ) : null}
           <Link href="/admin" className="serif brand">{studio.name}</Link>
-          <span className="pill">Dashboard</span>
         </div>
+        <AdminNav />
         <div className="admin-user">
           <span className="who">{demo ? "Demo preview" : email}</span>
           <ThemeToggle />
