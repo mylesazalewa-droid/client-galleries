@@ -131,7 +131,7 @@ export default function Dashboard({ galleries, demo, loadError, rootMissing, act
                 </div>
                 <div className="dash-actions">
                   <Link href={`/admin/g/${g.id}`} className="btn">Manage</Link>
-                  <CopyLink path={`/g/${g.slug}`} />
+                  <CopyLink path={g.review ? `/review/${g.slug}` : `/g/${g.slug}`} />
                 </div>
               </div>
             </article>

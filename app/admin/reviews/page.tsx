@@ -83,7 +83,7 @@ export default async function ReviewsPage() {
             {latest.length ? (
               <div className="list-page">
                 {latest.map((n) => (
-                  <a key={n.id} href={`/g/${n.gallery.slug}`} target="_blank" rel="noreferrer" className="list-row" style={{ alignItems: "flex-start" }}>
+                  <a key={n.id} href={`/review/${n.gallery.slug}`} target="_blank" rel="noreferrer" className="list-row" style={{ alignItems: "flex-start" }}>
                     <span className="lr-main">
                       <span className="lr-sub" style={{ display: "block" }}>{n.gallery.title} · {n.file}{n.t !== undefined ? ` · ${formatDuration(n.t) || "0:00"}` : n.x !== undefined ? " · pin" : ""}</span>
                       <span style={{ display: "block", marginTop: 3 }}><b>{n.author}:</b> {n.text}</span>

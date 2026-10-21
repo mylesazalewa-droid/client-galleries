@@ -14,6 +14,7 @@ export default function SiteFooter({ studio }: { studio: Studio }) {
           <Link href="/work">Work</Link>
           <Link href="/pricing">Pricing</Link>
           <Link href="/galleries">Client galleries</Link>
+          <Link href="/review">Review drafts</Link>
           <Link href="/about">About</Link>
           <Link href="/contact">Contact</Link>
           <a href="/admin">Studio login</a>

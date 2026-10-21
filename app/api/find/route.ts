@@ -9,5 +9,5 @@ export async function GET(req: Request) {
   await new Promise((r) => setTimeout(r, 300)); // slows down guessing
   if (code.length !== 6) return Response.json({ ok: false }, { status: 404 });
   const g = (await loadAll()).find((r) => !r.hidden && (linkCode(r.id) === code || r.slug.endsWith(code)));
-  return g ? Response.json({ ok: true, href: `/g/${g.slug}` }) : Response.json({ ok: false }, { status: 404 });
+  return g ? Response.json({ ok: true, review: g.settings.mode === "review", href: g.settings.mode === "review" ? `/review/${g.slug}` : `/g/${g.slug}` }) : Response.json({ ok: false }, { status: 404 });
 }

@@ -69,7 +69,7 @@ export default function GalleryManager({ gallery, demo, activity, stripe, gmail 
 
   const media = [...(g.cover && !g.items.some((i) => i.id === g.cover!.id) ? [g.cover] : []), ...g.items];
   const coverId = g.cover?.id ?? g.items.find((i) => i.kind === "photo")?.id;
-  const link = `/g/${g.slug}`;
+  const link = g.settings.mode === "review" ? `/review/${g.slug}` : `/g/${g.slug}`;
 
   async function refresh() {
     const res = await api("/api/admin/refresh", { method: "POST", body: JSON.stringify({ galleryId: g.id }) });
@@ -1044,7 +1044,7 @@ function Review({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings>, msg
         <p className="hint">{fb.notes.length ? "Every note is resolved." : "No notes yet. Share the gallery link and clients will see the review page."}</p>
       )}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <a className="btn" href={`/g/${g.slug}`} target="_blank" rel="noreferrer">Open review ↗</a>
+        <a className="btn" href={`/review/${g.slug}`} target="_blank" rel="noreferrer">Open review ↗</a>
         <button className={`btn ${allApproved ? "primary" : ""}`} disabled={busy} onClick={() => flip("", "Switched to delivery. Clients now see the download page.")}>Switch to delivery</button>
       </div>
       {!allApproved && files.length > 0 && <p className="hint" style={{ marginBottom: 0 }}>Upload your finals and switch to delivery once everything is approved. Notes stay saved.</p>}

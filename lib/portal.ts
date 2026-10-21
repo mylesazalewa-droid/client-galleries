@@ -24,7 +24,8 @@ export type PortalGallery = {
 };
 
 export async function loadPortal(slug: string) {
-  const all = (await loadAll()).filter((g) => !g.hidden && g.settings.client?.trim());
+  // Finished work only: drafts in review stay on their own review page.
+  const all = (await loadAll()).filter((g) => !g.hidden && g.settings.mode !== "review" && g.settings.client?.trim());
   const mine = all.filter((g) => portalSlug(g.settings.client!) === slug);
   if (!mine.length) return null;
   const client = mine[0].settings.client!.trim();
@@ -52,7 +53,7 @@ export async function portalLinks() {
   const out = new Map<string, { client: string; slug: string; count: number }>();
   for (const g of await loadAll()) {
     const c = g.settings.client?.trim();
-    if (!c || g.hidden) continue;
+    if (!c || g.hidden || g.settings.mode === "review") continue;
     const k = clientKey(c);
     const cur = out.get(k);
     out.set(k, { client: cur?.client ?? c, slug: portalSlug(c), count: (cur?.count ?? 0) + 1 });
