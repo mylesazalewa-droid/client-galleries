@@ -177,6 +177,9 @@ export default function GalleryManager({ gallery, demo, activity, stripe, gmail 
         </div>
         <div className="mgr-share">
           {g.settings.hold && <button className="btn" onClick={() => markPaid()}>Mark as paid</button>}
+          {g.settings.mode === "review"
+            ? <button className="btn" onClick={() => save({ mode: "" } as unknown as Partial<GallerySettings>, "Switched to delivery. Clients now see the download page.")}>Switch to delivery</button>
+            : <button className="btn" onClick={() => save({ mode: "review" }, "Review mode on. Share the same link for feedback.")}>Send for review</button>}
           <a className="btn" href={`${link}?as=client`} target="_blank" rel="noreferrer">View as client ↗</a>
           <CopyLink path={link} />
           {g.portal && <CopyLink path={g.portal} label="Copy client portal" />}
