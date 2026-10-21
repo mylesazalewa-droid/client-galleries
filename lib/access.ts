@@ -45,6 +45,8 @@ export async function viewerState(g: GalleryRecord) {
  */
 export async function canAccessFile(g: GalleryRecord, fileId: string, req: Request, opts: { download?: boolean } = {}) {
   if (await canView(g)) return true;
+  // Projects you chose to show on your website's Work page can be watched (not downloaded) by anyone.
+  if (g.settings.showcase && !opts.download && !g.settings.hold) return true;
   const { shareAllowed, validKey } = await import("./share");
   if (!shareAllowed(g)) return false;
   const q = new URL(req.url).searchParams;

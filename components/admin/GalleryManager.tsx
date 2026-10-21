@@ -499,6 +499,8 @@ function Settings({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings> & 
     expires: g.settings.expires ?? "",
     hold: !!g.settings.hold,
     picks: !!g.settings.picks,
+    showcase: !!g.settings.showcase,
+    blurb: g.settings.blurb ?? "",
     share: g.settings.share !== false,
     brandId: g.settings.brandId ?? "",
     watermark: g.settings.watermark ?? "",
@@ -543,6 +545,12 @@ function Settings({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings> & 
         </span>
       </label>
       <label className="field"><span>Welcome message</span><textarea value={f.message} onChange={set("message")} /></label>
+      <label className="check"><input type="checkbox" checked={f.showcase} onChange={set("showcase")} /> Show on my website&apos;s Work page</label>
+      {f.showcase && (
+        <label className="field"><span>Work page description</span><input value={f.blurb} onChange={set("blurb")} placeholder="e.g. Brand film for a Michigan credit union" maxLength={300} />
+          <small className="hint">Anyone can watch these files on your website (no downloads). Leave off for anything confidential.</small>
+        </label>
+      )}
       <label className="check"><input type="checkbox" checked={f.downloads} onChange={set("downloads")} /> Allow downloads</label>
       <label className="check"><input type="checkbox" checked={f.hold} onChange={set("hold")} /> Hold downloads until paid (watermarked previews)</label>
       {f.hold && marksFor(g, f.brandId) && (

@@ -49,6 +49,10 @@ export type GallerySettings = {
   hold?: boolean;
   /** let clients heart favorites and send picks */
   picks?: boolean;
+  /** show this project on the public Work page of the website */
+  showcase?: boolean;
+  /** one-line description for the Work page */
+  blurb?: string;
   /** let clients share a link to a single film (default on) */
   share?: boolean;
   /** usage rights / licensing note shown to the client */

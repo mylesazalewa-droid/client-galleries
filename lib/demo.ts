@@ -38,6 +38,8 @@ export function demoGalleries(): GalleryRecord[] {
         client: "Lakeshore Credit Union",
         date: "2026-09-18",
         message: "Your brand film in every format, plus stills from the two-day shoot.",
+        showcase: true,
+        blurb: "Brand film and stills for a Michigan credit union",
         license: "Licensed for Lakeshore Credit Union's website, social channels and internal events through October 2027.\nMusic is licensed for web and social. Paid advertising or broadcast needs an upgraded music license.",
       },
       clientLogoId: undefined,
