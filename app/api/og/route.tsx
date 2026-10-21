@@ -1,5 +1,5 @@
 import { ImageResponse } from "next/og";
-import { loadBrand, getStudio } from "@/lib/brand";
+import { brandFor, loadBrand, getStudio, type Brand } from "@/lib/brand";
 import { isDemo } from "@/lib/config";
 import { formatDate } from "@/lib/format";
 import { getRecord, isExpired, toGallery } from "@/lib/galleries";
@@ -45,7 +45,7 @@ async function serif(text: string) {
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const g = await getRecord(url.searchParams.get("g") ?? "");
-  const studio = await getStudio();
+  const { studio, brand, profile } = g ? await brandFor(g.settings) : { studio: await getStudio(), brand: (await loadBrand().catch(() => ({ brand: {} as Brand }))).brand, profile: undefined };
   const origin = url.origin;
 
   const film = g && url.searchParams.get("f") ? g.items.find((i) => i.id === url.searchParams.get("f") && i.kind === "video") : undefined;
@@ -56,11 +56,10 @@ export async function GET(req: Request) {
 
   const view = g ? toGallery(g) : undefined;
   const coverItem = film ?? view?.cover;
-  const { brand } = await loadBrand().catch(() => ({ brand: {} as { logoId?: string } }));
 
   const [bg, studioLogo, clientLogo] = await Promise.all([
     showImage && coverItem ? imageData(isDemo ? { url: coverItem.full } : { id: coverItem.id }, origin) : undefined,
-    brand.logoId ? imageData({ id: brand.logoId }, origin, 400) : undefined,
+    (profile ? profile.logoId : brand.logoId) ? imageData({ id: (profile ? profile.logoId : brand.logoId)! }, origin, 400) : undefined,
     g?.clientLogoId ? imageData({ id: g.clientLogoId }, origin, 400) : undefined,
   ]);
 

@@ -69,6 +69,8 @@ export type GallerySettings = {
   /** automatic email reminders */
   remindUnpaid?: boolean;
   remindClosing?: boolean;
+  /** white-label brand this gallery is shown under ("" = your own studio) */
+  brandId?: string;
   /** watermark for this gallery: a MarkOption id ("" = your default) */
   watermark?: string;
   watermarkLayout?: WatermarkLayout;
@@ -127,6 +129,8 @@ export type Studio = {
   logo?: string;
   /** image tiled over previews while a payment hold is on */
   watermark?: string;
+  /** set when a gallery is shown under a client's (white-label) brand */
+  whiteLabel?: boolean;
   /** URL + kind of the landing page background, if any */
   landing?: { src: string; poster?: string; kind: MediaKind };
 };

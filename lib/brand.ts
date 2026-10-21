@@ -23,11 +23,27 @@ export type Brand = {
   markLayout?: WatermarkLayout;
   landingId?: string;
   landingKind?: MediaKind;
+  /** white-label brands (agencies you edit for) */
+  profiles?: BrandProfile[];
   /** sessions that started before this time (ms) are signed out */
   signoutBefore?: number;
 };
 
 export const BRAND_FILE = "brand.json";
+
+/** A white-label brand: galleries set to it show this name, logo, colors and watermark instead of yours. */
+export type BrandProfile = {
+  id: string;
+  name: string;
+  tagline?: string;
+  email?: string;
+  website?: string;
+  accent?: string;
+  logoId?: string;
+  markDefault?: string;
+  markOpacity?: number;
+  markLayout?: WatermarkLayout;
+};
 
 type Loaded = { brand: Brand; fileId?: string; folderId?: string };
 let cache: { at: number; data: Promise<Loaded> } | null = null;
@@ -37,7 +53,7 @@ export function clearBrandCache() {
 }
 
 async function load(): Promise<Loaded> {
-  if (isDemo) return { brand: {} };
+  if (isDemo) return { brand: { profiles: [{ id: "demo-agency", name: "Northline Creative Co.", tagline: "Brand films & live events", email: "hello@northline.example", accent: "#5db0e0" }] } };
   const root = await resolveRoot();
   if (!root) return { brand: {} };
   const files = await listChildren(`'${root}' in parents and trashed=false and (name='${BRAND_FILE}' or name='${BRAND_FOLDER}')`);
@@ -109,28 +125,63 @@ export const clampOpacity = (n: unknown, fallback = 0.3) => {
 };
 
 /** Every watermark you can choose from. */
-export function markOptions(brand: Brand, studioName: string): MarkOption[] {
+export function markOptions(brand: Brand, studioName: string, profile?: BrandProfile): MarkOption[] {
   const uploaded = [...(brand.marks ?? [])];
   if (brand.watermarkId && !uploaded.some((m) => m.id === brand.watermarkId)) uploaded.unshift({ id: brand.watermarkId, name: "Uploaded watermark" });
+  const name = profile?.name ?? studioName;
   return [
-    { id: "builtin", name: "SOW Creative Studios mark", src: "/watermark.png" },
-    { id: "text", name: `Text: “${studioName}”`, text: studioName },
+    ...(profile?.logoId ? [{ id: `logo:${profile.id}`, name: `${profile.name} logo`, src: profileLogo(profile) }] : []),
+    // Your own mark is left out for white-label brands so it never shows on their galleries.
+    ...(profile ? [] : [{ id: "builtin", name: "SOW Creative Studios mark", src: "/watermark.png" }]),
+    { id: "text", name: `Text: “${name}”`, text: name },
     ...uploaded.map((m) => ({ id: m.id, name: m.name, src: `/api/brand/mark?id=${encodeURIComponent(m.id)}&v=${m.id.slice(-6)}`, uploaded: true })),
   ];
 }
 
-export function defaultMarkId(brand: Brand) {
+export function defaultMarkId(brand: Brand, profile?: BrandProfile) {
+  if (profile) return profile.markDefault ?? (profile.logoId ? `logo:${profile.id}` : "text");
   return brand.markDefault ?? (brand.watermarkId ? brand.watermarkId : "builtin");
 }
 
 /** The watermark for one gallery: its own choices, falling back to your defaults. */
-export function watermarkFor(brand: Brand, studioName: string, s: GallerySettings): WatermarkSpec {
-  const options = markOptions(brand, studioName);
-  const pick = options.find((o) => o.id === (s.watermark || defaultMarkId(brand))) ?? options[0];
+export function watermarkFor(brand: Brand, studioName: string, s: GallerySettings, profile?: BrandProfile): WatermarkSpec {
+  const options = markOptions(brand, studioName, profile);
+  const pick = options.find((o) => o.id === s.watermark) ?? options.find((o) => o.id === defaultMarkId(brand, profile)) ?? options[0];
+  const defOpacity = clampOpacity(profile?.markOpacity, clampOpacity(brand.markOpacity, 0.3));
+  const defLayout = profile?.markLayout ?? brand.markLayout;
   return {
     src: pick.src,
     text: pick.text,
-    opacity: clampOpacity(s.watermarkOpacity, clampOpacity(brand.markOpacity, 0.3)),
-    layout: s.watermarkLayout && LAYOUTS.includes(s.watermarkLayout) ? s.watermarkLayout : brand.markLayout && LAYOUTS.includes(brand.markLayout) ? brand.markLayout : "tile",
+    opacity: clampOpacity(s.watermarkOpacity, defOpacity),
+    layout: s.watermarkLayout && LAYOUTS.includes(s.watermarkLayout) ? s.watermarkLayout : defLayout && LAYOUTS.includes(defLayout) ? defLayout : "tile",
   };
+}
+
+export const profileLogo = (p: BrandProfile) => (p.logoId ? `/api/brand/plogo?id=${encodeURIComponent(p.logoId)}&v=${p.logoId.slice(-6)}` : undefined);
+
+/** The brand a gallery is shown under: yours, or the white-label brand picked in its settings. */
+export async function brandFor(s: GallerySettings): Promise<{ studio: Studio; brand: Brand; profile?: BrandProfile }> {
+  const { brand } = await loadBrand().catch(() => ({ brand: {} as Brand }));
+  const profile = s.brandId ? brand.profiles?.find((p) => p.id === s.brandId) : undefined;
+  if (!profile) return { studio: await getStudio(), brand };
+  return {
+    brand,
+    profile,
+    studio: {
+      name: profile.name,
+      tagline: profile.tagline ?? "",
+      url: profile.website,
+      email: profile.email,
+      accent: profile.accent,
+      logo: profileLogo(profile),
+      watermark: markOptions(brand, profile.name, profile).find((o) => o.id === defaultMarkId(brand, profile))?.src,
+      whiteLabel: true,
+    },
+  };
+}
+
+/** Accent color variables for a page shown under a white-label brand. */
+export function themeStyle(studio: Studio): React.CSSProperties | undefined {
+  if (!studio.whiteLabel || !studio.accent) return undefined;
+  return { "--accent": studio.accent, "--accent-ink": inkFor(studio.accent) } as React.CSSProperties;
 }

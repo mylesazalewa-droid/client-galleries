@@ -1,5 +1,5 @@
 import { logEvent, readActivity } from "@/lib/activity";
-import { getStudio } from "@/lib/brand";
+import { brandFor } from "@/lib/brand";
 import { isDemo } from "@/lib/config";
 import { isExpired, loadAll, payLink } from "@/lib/galleries";
 import { draftFor, LABELS, render, sendGmail, splitEmails, storedMailerToken } from "@/lib/mail";
@@ -25,7 +25,7 @@ export async function GET(req: Request) {
   const sender = await storedMailerToken().catch(() => null);
   if (!sender) return Response.json({ ok: false, error: "Gmail isn't connected (or the sign-in expired). Open the dashboard and click Connect Gmail." });
 
-  const [galleries, rows, studio] = await Promise.all([loadAll(true), readActivity(), getStudio()]);
+  const [galleries, rows] = await Promise.all([loadAll(true), readActivity()]);
   const emailed = rows.filter((r) => r.event === "Emailed");
   const origin = process.env.SITE_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : new URL(req.url).origin);
   const now = Date.now();
@@ -38,9 +38,10 @@ export async function GET(req: Request) {
     const mine = emailed.filter((r) => r.galleryId === g.id);
 
     const send = async (kind: "unpaid" | "closing", tag: string, payUrl?: string) => {
+      const { studio } = await brandFor(g.settings);
       const draft = draftFor(kind, g, studio, origin, payUrl);
       const { html, text } = render(draft, studio, origin);
-      await sendGmail(sender.token, { to, subject: draft.subject, html, text, from: { name: studio.name, email: sender.email } });
+      await sendGmail(sender.token, { to, subject: draft.subject, html, text, from: { name: studio.name, email: sender.email }, replyTo: studio.whiteLabel ? studio.email : undefined });
       await logEvent(req, { galleryId: g.id, title: g.title, event: "Emailed", detail: `${LABELS[kind]} · ${tag} · ${to.join(", ")} · automatic` }, { includeOwner: true, wait: true });
       sent.push(`${g.title}: ${LABELS[kind]}`);
     };

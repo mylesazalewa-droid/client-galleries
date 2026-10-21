@@ -15,8 +15,10 @@ const LAYOUTS: { id: WatermarkLayout; label: string }[] = [
 ];
 
 /** Your watermark library: pick the default, upload more, set layout and opacity. Galleries can pick their own. */
-export default function WatermarkPanel({ options: initial, defaultId, opacity: initialOpacity, layout: initialLayout, demo, say }: {
+export default function WatermarkPanel({ options: initial, defaultId, opacity: initialOpacity, layout: initialLayout, demo, say, saveUrl = "/api/admin/brand", fallbackId = "builtin", intro }: {
   options: MarkOption[]; defaultId: string; opacity: number; layout: WatermarkLayout; demo: boolean; say: (t: string) => void;
+  /** where the default watermark is saved (your studio, or a white-label brand) */
+  saveUrl?: string; fallbackId?: string; intro?: string;
 }) {
   const router = useRouter();
   const [options, setOptions] = useState(initial);
@@ -33,7 +35,7 @@ export default function WatermarkPanel({ options: initial, defaultId, opacity: i
   async function save() {
     if (demo) return say("Demo mode — connect Google to save.");
     setBusy("save");
-    const res = await api("/api/admin/brand", { method: "PATCH", body: JSON.stringify({ markDefault: selected, markOpacity: opacity, markLayout: layout }) });
+    const res = await api(saveUrl, { method: "PATCH", body: JSON.stringify({ markDefault: selected, markOpacity: opacity, markLayout: layout }) });
     setBusy("");
     if (!res.ok) return say(res.error || "Couldn't save");
     setBase({ defaultId: selected, opacity, layout });
@@ -71,8 +73,8 @@ export default function WatermarkPanel({ options: initial, defaultId, opacity: i
     setBusy("");
     if (!res.ok) return say(res.error || "Couldn't remove");
     setOptions((list) => list.filter((x) => x.id !== o.id));
-    if (selected === o.id) setSelected("builtin");
-    if (base.defaultId === o.id) setBase((b) => ({ ...b, defaultId: "builtin" }));
+    if (selected === o.id) setSelected(fallbackId);
+    if (base.defaultId === o.id) setBase((b) => ({ ...b, defaultId: fallbackId }));
     say(`Removed “${o.name}”.`);
     router.refresh();
   }
@@ -80,7 +82,7 @@ export default function WatermarkPanel({ options: initial, defaultId, opacity: i
   return (
     <div className="panel wm-panel">
       <h3>Watermark</h3>
-      <p className="hint" style={{ marginTop: 0 }}>Shown over previews while a gallery is held for payment. This is your default; each gallery can pick a different one in its settings.</p>
+      <p className="hint" style={{ marginTop: 0 }}>{intro ?? "Shown over previews while a gallery is held for payment. This is your default; each gallery can pick a different one in its settings."}</p>
 
       <div className="wm-stage">
         <div className="wm-stage-img" />

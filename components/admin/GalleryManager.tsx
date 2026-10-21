@@ -19,8 +19,11 @@ type G = {
   clientLogo?: string;
   paid?: boolean;
   portal?: string;
-  marks?: { options: MarkOption[]; defaultId: string; opacity: number; layout: string };
+  marks?: Marks;
+  brands?: { id: string; name: string; marks: Marks }[];
+  studioName?: string;
 };
+type Marks = { options: MarkOption[]; defaultId: string; opacity: number; layout: string };
 
 const LICENSES: { label: string; text: (client: string) => string }[] = [
   { label: "Unlimited", text: (c) => `Licensed to ${c || "the client"} for unlimited use, worldwide and in perpetuity: website, social, paid ads, broadcast, events and internal communications. Music is cleared for these uses. Raw footage and project files aren't included.` },
@@ -446,6 +449,8 @@ function Thumb({ item, isCover, sections, onCover, onRemove, onRename, onMove }:
 
 // ------------------------------------------------------------------ settings
 
+const marksFor = (g: G, brandId: string) => (brandId ? g.brands?.find((b) => b.id === brandId)?.marks : undefined) ?? g.marks;
+
 function Settings({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings> & { title?: string }) => Promise<boolean> }) {
   const [f, setF] = useState({
     title: g.title,
@@ -460,6 +465,7 @@ function Settings({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings> & 
     hold: !!g.settings.hold,
     picks: !!g.settings.picks,
     share: g.settings.share !== false,
+    brandId: g.settings.brandId ?? "",
     watermark: g.settings.watermark ?? "",
     watermarkLayout: (g.settings.watermarkLayout ?? "") as WatermarkLayout | "",
     watermarkOpacity: g.settings.watermarkOpacity ? String(Math.round(g.settings.watermarkOpacity * 100)) : "",
@@ -484,6 +490,13 @@ function Settings({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings> & 
     <form className="panel" onSubmit={submit}>
       <h3>Gallery settings</h3>
       <label className="field"><span>Name</span><input required value={f.title} onChange={set("title")} /></label>
+      <label className="field"><span>Brand</span>
+        <select value={f.brandId} onChange={(e) => setF({ ...f, brandId: e.target.value, watermark: "" })}>
+          <option value="">{g.studioName ?? "Your studio"} (you)</option>
+          {(g.brands ?? []).map((b) => <option key={b.id} value={b.id}>{b.name} (white label)</option>)}
+        </select>
+        <small className="hint">{f.brandId ? "Clients see this brand's name, logo, colors and watermark instead of yours." : <>Editing for an agency? <a href="/admin/brands">Set up a client brand</a> and pick it here.</>}</small>
+      </label>
       <label className="field"><span>Client</span><input value={f.client} onChange={set("client")} /></label>
       <label className="field"><span>Client email</span><input type="text" inputMode="email" value={f.clientEmail} onChange={set("clientEmail")} placeholder="name@company.com, another@company.com" /></label>
       <label className="field"><span>Date</span><input type="date" value={f.date} onChange={set("date")} /></label>
@@ -497,12 +510,12 @@ function Settings({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings> & 
       <label className="field"><span>Welcome message</span><textarea value={f.message} onChange={set("message")} /></label>
       <label className="check"><input type="checkbox" checked={f.downloads} onChange={set("downloads")} /> Allow downloads</label>
       <label className="check"><input type="checkbox" checked={f.hold} onChange={set("hold")} /> Hold downloads until paid (watermarked previews)</label>
-      {f.hold && g.marks && (
+      {f.hold && marksFor(g, f.brandId) && (
         <div className="wm-gal">
           <label className="field"><span>Watermark for this gallery</span>
             <select value={f.watermark} onChange={(e) => setF({ ...f, watermark: e.target.value })}>
-              <option value="">Default — {g.marks.options.find((o) => o.id === g.marks!.defaultId)?.name ?? "your watermark"}</option>
-              {g.marks.options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+              <option value="">Default — {marksFor(g, f.brandId)!.options.find((o) => o.id === marksFor(g, f.brandId)!.defaultId)?.name ?? "your watermark"}</option>
+              {marksFor(g, f.brandId)!.options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
             </select>
           </label>
           <div className="field-row">
@@ -516,7 +529,7 @@ function Settings({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings> & 
             </label>
             <label className="field"><span>Opacity</span>
               <select value={f.watermarkOpacity} onChange={(e) => setF({ ...f, watermarkOpacity: e.target.value })}>
-                <option value="">Default ({Math.round(g.marks.opacity * 100)}%)</option>
+                <option value="">Default ({Math.round(marksFor(g, f.brandId)!.opacity * 100)}%)</option>
                 {[10, 15, 20, 30, 40, 50, 65].map((n) => <option key={n} value={String(n)}>{n}%</option>)}
               </select>
             </label>

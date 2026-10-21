@@ -10,6 +10,7 @@ import { findActivitySheet, readActivity, summarize } from "@/lib/activity";
 import { isExpired, loadAll, resolveRoot } from "@/lib/galleries";
 import { currentOwner } from "@/lib/owner";
 import { portalLinks } from "@/lib/portal";
+import { loadBrand, type Brand } from "@/lib/brand";
 
 function dueOf(g: GalleryRecord) {
   const paid = new Set(g.paidLinks ?? []);
@@ -40,6 +41,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     ]);
     activityUrl = sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}/edit` : owner.demo ? "" : null;
     const stats = summarize(rows);
+    const profiles = (await loadBrand().catch(() => ({ brand: {} as Brand }))).brand.profiles ?? [];
     portals = await portalLinks();
     payments = rows
       .filter((r) => r.event === "Paid" || r.event === "Marked paid")
@@ -52,6 +54,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         expired: isExpired(g.settings),
         hold: !!g.settings.hold,
         due: g.settings.hold ? dueOf(g) : undefined,
+        brand: g.settings.brandId ? profiles.find((p) => p.id === g.settings.brandId)?.name : undefined,
         expires: g.settings.expires,
         views: st?.views ?? 0,
         downloads: st?.downloads ?? 0,

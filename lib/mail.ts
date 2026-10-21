@@ -32,11 +32,12 @@ export function splitEmails(list?: string) {
     .filter((x) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
 }
 
-export async function sendGmail(token: string, m: { to: string[]; subject: string; text: string; html: string; from?: { name: string; email: string } }) {
+export async function sendGmail(token: string, m: { to: string[]; subject: string; text: string; html: string; from?: { name: string; email: string }; replyTo?: string }) {
   const boundary = `b${Date.now().toString(36)}`;
   const headers = [
     `To: ${m.to.join(", ")}`,
     ...(m.from ? [`From: ${encodeHeader(m.from.name)} <${m.from.email}>`] : []),
+    ...(m.replyTo && /^[^@\s<>]+@[^@\s<>]+$/.test(m.replyTo) ? [`Reply-To: ${m.replyTo}`] : []),
     `Subject: ${encodeHeader(m.subject)}`,
     "MIME-Version: 1.0",
     `Content-Type: multipart/alternative; boundary="${boundary}"`,

@@ -6,6 +6,7 @@ import DownloadMenu from "@/components/DownloadMenu";
 import FilmPlayer from "@/components/FilmPlayer";
 import FilmTrack from "@/components/FilmTrack";
 import { getStudio, loadFilm } from "@/lib/film";
+import { brandFor, themeStyle } from "@/lib/brand";
 import { formatDate, formatDuration } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -17,11 +18,12 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   const { k, d } = await searchParams;
   const r = await loadFilm(slug, id, k ?? null, d ?? null);
   if (!r.ok) return { title: r.g?.title };
+  const { studio } = await brandFor(r.g.settings);
   const title = r.item.title ?? r.item.name.replace(/\.[^.]+$/, "");
   const description = r.g.settings.client ? `Prepared for ${r.g.settings.client}` : r.g.title;
   const image = `/api/og?g=${slug}&f=${encodeURIComponent(r.item.id)}${k ? `&k=${k}` : ""}`;
   return {
-    title,
+    title: { absolute: `${title} · ${studio.name}` },
     description,
     openGraph: { title, description, type: "video.other", images: [{ url: image, width: 1200, height: 630 }] },
     twitter: { card: "summary_large_image", title, description, images: [image] },
@@ -31,7 +33,8 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 export default async function FilmPage({ params, searchParams }: Props) {
   const { slug, id } = await params;
   const { k, d } = await searchParams;
-  const [r, studio] = await Promise.all([loadFilm(slug, id, k ?? null, d ?? null), getStudio()]);
+  const r = await loadFilm(slug, id, k ?? null, d ?? null);
+  const studio = r.g ? (await brandFor(r.g.settings)).studio : await getStudio();
   if (!r.ok) {
     if (r.reason === "closed" && r.g) return <Closed studio={studio} title={r.g.title} />;
     if (r.reason === "private" && r.g) {
@@ -52,7 +55,7 @@ export default async function FilmPage({ params, searchParams }: Props) {
   const meta = [g.settings.client, g.settings.date && formatDate(g.settings.date), item.duration && formatDuration(item.duration)].filter(Boolean).join(" · ");
 
   return (
-    <div className="film-page">
+    <div className="film-page" style={themeStyle(studio)}>
       {!owner && <FilmTrack slug={g.slug} film={title} />}
       <header className="film-top">
         <Brand studio={studio} />

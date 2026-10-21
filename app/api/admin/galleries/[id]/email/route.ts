@@ -1,5 +1,5 @@
 import { logEvent } from "@/lib/activity";
-import { getStudio } from "@/lib/brand";
+import { brandFor } from "@/lib/brand";
 import { getRecordById, payLink, type GalleryRecord } from "@/lib/galleries";
 import { draftFor, LABELS, MailError, render, sendGmail, splitEmails, type MailKind } from "@/lib/mail";
 import { adminRoute, ownerToken } from "@/lib/owner";
@@ -22,7 +22,7 @@ export const GET = adminRoute(async (req: Request, ctx: Ctx) => {
   if (!g) return Response.json({ ok: false, error: "Gallery not found" }, { status: 404 });
   const kind = new URL(req.url).searchParams.get("kind") as MailKind;
   if (!KINDS.includes(kind)) return Response.json({ ok: false, error: "Unknown email" }, { status: 400 });
-  const draft = draftFor(kind, g, await getStudio(), new URL(req.url).origin, nextPayUrl(g));
+  const draft = draftFor(kind, g, (await brandFor(g.settings)).studio, new URL(req.url).origin, nextPayUrl(g));
   return Response.json({ ok: true, to: g.settings.clientEmail ?? "", draft });
 });
 
@@ -37,14 +37,14 @@ export const POST = adminRoute(async (req: Request, ctx: Ctx) => {
   if (!to.length) return Response.json({ ok: false, error: "Add the client's email address." }, { status: 400 });
   if (to.length > 10) return Response.json({ ok: false, error: "That's a lot of recipients — 10 at most." }, { status: 400 });
 
-  const studio = await getStudio();
+  const { studio } = await brandFor(g.settings);
   const origin = new URL(req.url).origin;
   const base = draftFor(kind, g, studio, origin, nextPayUrl(g));
   const draft = { subject: String(body.subject ?? base.subject).slice(0, 200), body: String(body.body ?? base.body).slice(0, 8000), button: base.button };
   const { html, text } = render(draft, studio, origin);
   try {
     const { email, token } = await ownerToken();
-    await sendGmail(token, { to, subject: draft.subject, html, text, from: { name: studio.name, email } });
+    await sendGmail(token, { to, subject: draft.subject, html, text, from: { name: studio.name, email }, replyTo: studio.whiteLabel ? studio.email : undefined });
     await logEvent(req, { galleryId: g.id, title: g.title, event: "Emailed", detail: `${LABELS[kind]} · ${to.join(", ")}` }, { includeOwner: true });
     return Response.json({ ok: true });
   } catch (e) {

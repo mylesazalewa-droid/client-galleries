@@ -19,6 +19,8 @@ export type DashGallery = {
   coverThumb?: string;
   expired: boolean;
   hold: boolean;
+  /** white-label brand name, when not your own */
+  brand?: string;
   /** "$2,500.00" when a payment request is open */
   due?: string;
   expires?: string;
@@ -73,6 +75,7 @@ export default function Dashboard({ galleries, demo, loadError, rootMissing, act
         <div className="admin-head-actions">
           {activityUrl && <a className="btn" href={activityUrl} target="_blank" rel="noreferrer">Activity sheet ↗</a>}
           <Link className="btn" href="/admin/brand">Branding</Link>
+          <Link className="btn" href="/admin/brands">Client brands</Link>
           <button className="btn primary" onClick={() => setCreating(true)}>+ New gallery</button>
         </div>
       </div>
@@ -137,6 +140,7 @@ export default function Dashboard({ galleries, demo, loadError, rootMissing, act
                 {g.coverThumb ? <img src={g.coverThumb} alt="" loading="lazy" /> : <span className="dash-empty"><Photo /> No media yet</span>}
                 <span className="dash-tags">
                   {g.hidden && <span className="tag">Draft</span>}
+                  {g.brand && <span className="tag">{g.brand}</span>}
                   {g.expired && <span className="tag warn">Expired</span>}
                   {g.hold && <span className="tag">{g.due ? `Awaiting ${g.due}` : "Awaiting payment"}</span>}
                   {g.locked && <span className="tag"><Lock /> Password</span>}

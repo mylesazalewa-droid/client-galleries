@@ -45,6 +45,17 @@ export default async function ManagePage({ params }: { params: Promise<{ id: str
           paid: !!g.paid,
           portal: g.settings.client?.trim() ? `/c/${portalSlug(g.settings.client)}` : undefined,
           marks: { options: markOptions(brand, studioName), defaultId: defaultMarkId(brand), opacity: clampOpacity(brand.markOpacity, 0.3), layout: brand.markLayout ?? "tile" },
+          brands: (brand.profiles ?? []).map((p) => ({
+            id: p.id,
+            name: p.name,
+            marks: {
+              options: markOptions(brand, p.name, p),
+              defaultId: defaultMarkId(brand, p),
+              opacity: clampOpacity(p.markOpacity, clampOpacity(brand.markOpacity, 0.3)),
+              layout: p.markLayout ?? brand.markLayout ?? "tile",
+            },
+          })),
+          studioName,
         }}
       />
     </AdminShell>

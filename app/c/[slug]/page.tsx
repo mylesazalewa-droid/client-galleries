@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Brand } from "@/components/Brand";
 import { Lock } from "@/components/icons";
-import { getStudio } from "@/lib/brand";
+import { brandFor, getStudio, themeStyle } from "@/lib/brand";
 import { formatDate, plural } from "@/lib/format";
 import { loadPortal } from "@/lib/portal";
 
@@ -13,17 +13,22 @@ type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const p = await loadPortal((await params).slug);
-  return p ? { title: `${p.client} — Projects`, description: `Everything ${(await getStudio()).name} has delivered for ${p.client}` } : {};
+  if (!p) return {};
+  const { studio } = p.records[0] ? await brandFor(p.records[0].settings) : { studio: await getStudio() };
+  return { title: { absolute: `${p.client} — Projects · ${studio.name}` }, description: `Everything ${studio.name} has delivered for ${p.client}` };
 }
 
 /** A client's home: every gallery made for them, newest first. */
 export default async function PortalPage({ params }: Props) {
-  const [portal, studio] = await Promise.all([loadPortal((await params).slug), getStudio()]);
+  const portal = await loadPortal((await params).slug);
   if (!portal) notFound();
+  // A client's portal uses the brand of their most recent gallery.
+  const newest = [...portal.records].sort((a, b) => (b.settings.date ?? "").localeCompare(a.settings.date ?? ""))[0];
+  const { studio } = await brandFor(newest.settings);
   const { client, logo, galleries } = portal;
 
   return (
-    <div className="portal">
+    <div className="portal" style={themeStyle(studio)}>
       <header className="portal-top">
         <Brand studio={studio} />
       </header>

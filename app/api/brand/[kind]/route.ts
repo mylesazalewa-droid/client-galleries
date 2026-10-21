@@ -13,6 +13,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ kind: string }>
     : kind === "landing" ? brand.landingId
     : kind === "watermark" ? brand.watermarkId
     : kind === "mark" && markId && (brand.marks?.some((m) => m.id === markId) || brand.watermarkId === markId) ? markId
+    : kind === "plogo" && markId && brand.profiles?.some((p) => p.logoId === markId) ? markId
     : undefined;
   if (!id) return new Response("Not found", { status: 404 });
   const url = new URL(req.url);

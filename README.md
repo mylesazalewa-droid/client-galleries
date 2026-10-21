@@ -123,6 +123,7 @@ Copy `.env.example` to `.env.local` and fill in:
 - **Deposit + final payment**: in the Payment panel tick “Split into a deposit and a final payment”. Clients pay the deposit, then the final payment; previews stay watermarked until both are paid. Each part can be marked paid by hand.
 - **Client portals**: every client (by the Client field) gets one private link listing all of their galleries — see “Client portals” on the dashboard or “Copy client portal” in a gallery.
 - **Email from your Gmail**: click “Connect Gmail” in a gallery (the Gmail API must be enabled in your Google Cloud project). Send the invite or payment link from the dashboard, and turn on automatic reminders (unpaid payment every 3 days, up to 3 times; 3 days before a gallery closes). Reminders run daily at 10am Eastern via Vercel Cron (`vercel.json`); optionally set `CRON_SECRET` in Vercel to lock the endpoint.
+- **Client brands (white label)**: Dashboard → Client brands. Create a brand for each agency you edit for (name, logo, colors, contact email, website, watermark). Pick it in a gallery's settings → Brand, and clients see that brand everywhere (gallery, film links, portal, link previews, emails, watermark) instead of yours. Emails still send from your Gmail but under the brand's name, with replies going to the brand's contact email.
 - **Owner preview**: when you're signed in you see everything; use “See what clients see” (or add `?as=client` to a gallery link) to check the password screen, watermarks and expiry.
 
 ## Good to know
