@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Closed from "@/components/Closed";
 import GalleryView from "@/components/GalleryView";
 import LockScreen from "@/components/LockScreen";
+import ReviewView from "@/components/ReviewView";
 import { canView } from "@/lib/access";
 import { brandFor, themeStyle, watermarkFor } from "@/lib/brand";
 import { formatDate } from "@/lib/format";
@@ -62,6 +63,19 @@ export default async function GalleryPage({ params, searchParams }: Props) {
         profile && `Shown to clients under the “${profile.name}” brand.`,
       ].filter((x): x is string => !!x)
     : [];
+
+  if (g.settings.mode === "review") {
+    // Drafts: always watermarked so review copies can't stand in for finals.
+    return (
+      <div style={theme}>
+        <ReviewView
+          gallery={{ ...toGallery(g, owner), watermark: watermarkFor(brand, studio.name, g.settings, profile) }}
+          studio={studio}
+          owner={owner ? { clientView: `/g/${g.slug}?as=client`, notes } : undefined}
+        />
+      </div>
+    );
+  }
 
   return (
     <div style={theme}>

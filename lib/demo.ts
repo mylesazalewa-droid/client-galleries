@@ -65,5 +65,15 @@ export function demoGalleries(): GalleryRecord[] {
       extras: [],
       items: [p[6], p[7], p[8], p[10], p[11], film("Conference recap.mp4", 22, 5)].map((x) => ({ ...x, section: "" })),
     },
+    {
+      id: "demo-3",
+      slug: "harbor-health-rough-cut",
+      title: "Harbor Health — Rough Cut v2",
+      settings: { client: "Harbor Health", date: "2026-10-14", mode: "review", message: "Here's the second cut. Leave notes right on the film and stills." },
+      cover: p[1],
+      sections: [],
+      extras: [],
+      items: [film("Rough cut v2.mp4", 27, 5), p[1], p[3], p[5]].map((x) => ({ ...x, section: "" })),
+    },
   ];
 }

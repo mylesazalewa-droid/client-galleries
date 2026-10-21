@@ -19,6 +19,8 @@ export type DashGallery = {
   coverThumb?: string;
   expired: boolean;
   hold: boolean;
+  /** in client review: open notes and approved files */
+  review?: { open: number; approved: number };
   /** white-label brand name, when not your own */
   brand?: string;
   /** "$2,500.00" when a payment request is open */
@@ -141,6 +143,7 @@ export default function Dashboard({ galleries, demo, loadError, rootMissing, act
                 <span className="dash-tags">
                   {g.hidden && <span className="tag">Draft</span>}
                   {g.brand && <span className="tag">{g.brand}</span>}
+                  {g.review && <span className="tag review">In review{g.review.open ? ` · ${g.review.open} open` : ""}{g.review.approved ? ` · ${g.review.approved} approved` : ""}</span>}
                   {g.expired && <span className="tag warn">Expired</span>}
                   {g.hold && <span className="tag">{g.due ? `Awaiting ${g.due}` : "Awaiting payment"}</span>}
                   {g.locked && <span className="tag"><Lock /> Password</span>}

@@ -151,3 +151,14 @@ components/GalleryView.tsx  hero, filters, grid, selection bar, send dialog
 components/Lightbox.tsx     viewer with gestures, notes, downloads
 lib/galleries.ts            reads folders/files from Drive (and demo data)
 ```
+
+## Client review (drafts)
+
+Turn on **Client review** in a gallery's dashboard panel to send drafts for feedback before delivery. The same gallery link opens a review page instead of the download page:
+
+- Films: pause and write a note to pin it to that moment. Notes show as numbered markers under the player; click one to jump there.
+- Photos: click the photo to drop a numbered pin.
+- Replies, mark resolved / reopen, and **Approve** per file (shows who approved).
+- Previews are always watermarked with the gallery's brand watermark. Password, expiry and white-label brand still apply.
+- Notes are saved as rows in a **Feedback** tab of the activity spreadsheet.
+- When everything's approved, click **Switch to delivery**. Notes stay saved.

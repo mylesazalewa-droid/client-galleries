@@ -69,6 +69,8 @@ export type GallerySettings = {
   /** automatic email reminders */
   remindUnpaid?: boolean;
   remindClosing?: boolean;
+  /** "review": drafts for feedback (timestamped notes, pins, approvals) instead of a delivery */
+  mode?: "review";
   /** white-label brand this gallery is shown under ("" = your own studio) */
   brandId?: string;
   /** watermark for this gallery: a MarkOption id ("" = your default) */
