@@ -2,7 +2,7 @@ import "server-only";
 import { ACTIVITY_NAME, findActivitySheet, HEADERS, rememberActivitySheet, SHEET_MIME } from "./activity";
 import { BRAND_FILE } from "./brand";
 import { rootFolderName } from "./config";
-import { BRAND_FOLDER, clearCache, resolveRoot, REVIEWS_FOLDER, SETTINGS_FILE } from "./galleries";
+import { BRAND_FOLDER, clearCache, FOLDER_MARKER, resolveRoot, REVIEWS_FOLDER, SETTINGS_FILE } from "./galleries";
 import { sheets } from "./google";
 import type { GallerySettings } from "./types";
 
@@ -132,12 +132,28 @@ export async function createGallery(token: string, title: string, settings: Gall
   return folder.id;
 }
 
-/** Creates a Markup review project in CLIENTS/_REVIEWS, with a "Version 1" folder ready for drafts. */
-export async function createReview(token: string, title: string, settings: GallerySettings) {
+/** CLIENTS/_REVIEWS, created on first use. */
+export async function ensureReviewsBox(token: string) {
   const root = await ensureRoot(token);
-  const box =
+  return (
     (await ownerFind(token, `name='${REVIEWS_FOLDER}' and '${root}' in parents and mimeType='${FOLDER}' and trashed=false`)) ??
-    (await call<{ id: string }>(token, `${API}/files?fields=id`, { method: "POST", body: JSON.stringify({ name: REVIEWS_FOLDER, mimeType: FOLDER, parents: [root] }) })).id;
+    (await call<{ id: string }>(token, `${API}/files?fields=id`, { method: "POST", body: JSON.stringify({ name: REVIEWS_FOLDER, mimeType: FOLDER, parents: [root] }) })).id
+  );
+}
+
+/** A Markup folder (e.g. one client with several projects): a Drive folder in _REVIEWS marked with _folder.json. */
+export async function createReviewFolder(token: string, name: string) {
+  const box = await ensureReviewsBox(token);
+  const folder = await call<{ id: string }>(token, `${API}/files?fields=id`, { method: "POST", body: JSON.stringify({ name: name.trim(), mimeType: FOLDER, parents: [box] }) });
+  const { body, headers } = multipart({ name: FOLDER_MARKER, parents: [folder.id], mimeType: "application/json" }, JSON.stringify({ kind: "markup-folder" }));
+  await call(token, `${UPLOAD}/files?uploadType=multipart&fields=id`, { method: "POST", body, headers });
+  clearCache();
+  return folder.id;
+}
+
+/** Creates a Markup review project (in a folder, or loose in _REVIEWS) with a "Version 1" folder ready for drafts. */
+export async function createReview(token: string, title: string, settings: GallerySettings, parent?: string) {
+  const box = parent || (await ensureReviewsBox(token));
   const folder = await call<{ id: string }>(token, `${API}/files?fields=id`, {
     method: "POST",
     body: JSON.stringify({ name: title.trim(), mimeType: FOLDER, parents: [box] }),

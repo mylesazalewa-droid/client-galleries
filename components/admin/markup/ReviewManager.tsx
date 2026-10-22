@@ -7,7 +7,8 @@ import { Film, Photo, Play } from "../../icons";
 import CopyLink from "../CopyLink";
 import { Uploader } from "../GalleryManager";
 
-type P = { id: string; slug: string; title: string; settings: GallerySettings; hidden: boolean; items: MediaItem[]; sections: Section[] };
+type P = { id: string; slug: string; title: string; settings: GallerySettings; hidden: boolean; items: MediaItem[]; sections: Section[]; group?: { id: string; name: string } };
+type Folder = { id: string; name: string };
 type Note = { id: string; fileId: string; author: string; text: string; t?: number; x?: number; resolved: boolean; owner: boolean; at: string; replies: { id: string; author: string; text: string; owner: boolean }[] };
 type Feedback = { notes: Note[]; approvals: { fileId: string; author: string; at: string }[] };
 type Tab = "drafts" | "feedback" | "settings";
@@ -20,13 +21,17 @@ async function api(url: string, init: RequestInit = {}) {
 const nameOf = (i: MediaItem) => i.title ?? i.name.replace(/\.[^.]+$/, "");
 
 /** Markup: one review project — versions of drafts, client notes, and its settings. Nothing here touches delivery galleries. */
-export default function ReviewManager({ project, brands, demo }: { project: P; brands: { id: string; name: string }[]; demo: boolean }) {
+export default function ReviewManager({ project, brands, folders, demo }: { project: P; brands: { id: string; name: string }[]; folders: Folder[]; demo: boolean }) {
   const router = useRouter();
   const [p, setP] = useState(project);
   const [tab, setTab] = useState<Tab>("drafts");
   const [ver, setVer] = useState(project.sections.at(-1)?.id ?? "");
   const [fb, setFb] = useState<Feedback | null>(null);
   const [toast, setToast] = useState("");
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [confirmBulk, setConfirmBulk] = useState(false);
+  const [confirmVer, setConfirmVer] = useState(false);
   const say = useCallback((t: string) => { setToast(t); setTimeout(() => setToast(""), 3200); }, []);
   const link = `/review/${p.slug}`;
 
@@ -51,11 +56,40 @@ export default function ReviewManager({ project, brands, demo }: { project: P; b
     say(`${name} started. Upload the new drafts below.`);
   }
 
-  async function remove(item: MediaItem) {
+  async function remove(item: MediaItem, quiet = false) {
     const res = await api(`/api/admin/files/${item.id}?g=${p.id}`, { method: "DELETE" });
-    if (!res.ok) return say(res.error || "Couldn't remove");
+    if (!res.ok) { say(res.error || "Couldn't delete"); return false; }
     setP((cur) => ({ ...cur, items: cur.items.filter((i) => i.id !== item.id) }));
-    say(`Removed ${item.name}`);
+    if (!quiet) say(`Deleted ${item.name} (it's in your Drive trash)`);
+    return true;
+  }
+
+  async function removePicked() {
+    const list = p.items.filter((i) => picked.has(i.id));
+    let n = 0;
+    for (const it of list) if (await remove(it, true)) n++;
+    say(`Deleted ${n} draft${n === 1 ? "" : "s"} (they're in your Drive trash)`);
+    setPicked(new Set()); setSelecting(false); setConfirmBulk(false);
+  }
+
+  async function removeVersion() {
+    const sec = p.sections.find((s) => s.id === ver);
+    if (!sec) return;
+    const res = await api(`/api/admin/sections/${sec.id}?g=${p.id}`, { method: "DELETE" });
+    setConfirmVer(false);
+    if (!res.ok) return say(res.error || "Couldn't delete the version");
+    const rest = p.sections.filter((s) => s.id !== sec.id);
+    setP((cur) => ({ ...cur, sections: rest, items: cur.items.filter((i) => i.section !== sec.id) }));
+    setVer(rest.at(-1)?.id ?? "");
+    say(`Deleted ${sec.name} (it's in your Drive trash)`);
+  }
+
+  async function move(folderId: string) {
+    const res = await api(`/api/admin/reviews/${p.id}/move`, { method: "POST", body: JSON.stringify({ folderId }) });
+    if (!res.ok) return say(res.error || "Couldn't move");
+    setP((cur) => ({ ...cur, group: folders.find((f) => f.id === folderId) }));
+    say(folderId ? `Moved to ${folders.find((f) => f.id === folderId)?.name}` : "Moved out of the folder");
+    router.refresh();
   }
 
   async function save(patch: Partial<GallerySettings> & { title?: string }) {
@@ -90,6 +124,12 @@ export default function ReviewManager({ project, brands, demo }: { project: P; b
         <div className="mk-crumbs inline">
           <a href="/admin/reviews">Projects</a>
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 6l6 6-6 6" /></svg>
+          {p.group && (
+            <>
+              <a href={`/admin/reviews?folder=${p.group.id}`}>{p.group.name}</a>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 6l6 6-6 6" /></svg>
+            </>
+          )}
           <b>{p.title}</b>
           {p.settings.reviewStatus && <span className={`mk-chip s-${p.settings.reviewStatus}`}><span className="dot" />{STATUS[p.settings.reviewStatus]}</span>}
         </div>
@@ -119,6 +159,19 @@ export default function ReviewManager({ project, brands, demo }: { project: P; b
               </button>
             ))}
             <button className="chip add" onClick={newVersion} disabled={demo} title="Start the next round of drafts">+ New version</button>
+            <span className="mk-sub-sep" />
+            {files.length > 0 && (selecting ? (
+              <>
+                <button className="chip" onClick={() => setPicked(picked.size === files.length ? new Set() : new Set(files.map((f) => f.id)))}>{picked.size === files.length ? "Select none" : "Select all"}</button>
+                {confirmBulk
+                  ? <button className="chip danger on" disabled={!picked.size || demo} onClick={removePicked}>Delete {picked.size}? Yes</button>
+                  : <button className="chip danger" disabled={!picked.size} onClick={() => setConfirmBulk(true)}>Delete {picked.size || ""} selected</button>}
+                <button className="chip" onClick={() => { setSelecting(false); setPicked(new Set()); setConfirmBulk(false); }}>Done</button>
+              </>
+            ) : <button className="chip" onClick={() => setSelecting(true)}>Select drafts</button>)}
+            {p.sections.length > 1 && !selecting && (confirmVer
+              ? <><button className="chip danger on" disabled={demo} onClick={removeVersion}>Delete {verName} and its drafts?</button><button className="chip" onClick={() => setConfirmVer(false)}>Keep</button></>
+              : <button className="chip danger" onClick={() => setConfirmVer(true)}>Delete {verName?.replace(/^Version /, "V")}</button>)}
           </div>
         )}
       </div>
@@ -128,6 +181,9 @@ export default function ReviewManager({ project, brands, demo }: { project: P; b
           <div className="mk-cards">
             {files.map((item) => (
               <DraftCard
+                selecting={selecting}
+                picked={picked.has(item.id)}
+                onPick={() => setPicked((cur) => { const n = new Set(cur); if (n.has(item.id)) n.delete(item.id); else n.add(item.id); return n; })}
                 key={item.id}
                 item={item}
                 href={`${link}?f=${encodeURIComponent(item.id)}`}
@@ -174,18 +230,33 @@ export default function ReviewManager({ project, brands, demo }: { project: P; b
         </div>
       )}
 
-      {tab === "settings" && <div className="mk-pane narrow"><ReviewSettings p={p} brands={brands} demo={demo} onSave={save} say={say} onDeleted={() => { router.push("/admin/reviews"); router.refresh(); }} /></div>}
+      {tab === "settings" && <div className="mk-pane narrow"><ReviewSettings p={p} brands={brands} folders={folders} onMove={move} demo={demo} onSave={save} say={say} onDeleted={() => { router.push("/admin/reviews"); router.refresh(); }} /></div>}
 
       {toast && <div className="toast" role="status">{toast}</div>}
     </>
   );
 }
 
-function DraftCard({ item, href, comments, open, approved, onRemove }: { item: MediaItem; href: string; comments: number; open: number; approved: boolean; onRemove: () => void }) {
+function DraftCard({ item, href, comments, open, approved, onRemove, selecting, picked, onPick }: {
+  item: MediaItem; href: string; comments: number; open: number; approved: boolean; onRemove: () => void;
+  selecting: boolean; picked: boolean; onPick: () => void;
+}) {
   const [menu, setMenu] = useState(false);
+  const [confirm, setConfirm] = useState(false);
   return (
-    <div className="mk-card">
-      <a href={href} className="mk-card-art">
+    <div className={`mk-card ${picked ? "picked" : ""}`}>
+      {selecting && (
+        <button className={`mk-check ${picked ? "on" : ""}`} onClick={onPick} aria-pressed={picked} aria-label={`Select ${item.name}`}>
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12l5 5 9-10" /></svg>
+        </button>
+      )}
+      {!selecting && (
+        <button className={`mk-trash ${confirm ? "on" : ""}`} onClick={() => (confirm ? onRemove() : setConfirm(true))} onMouseLeave={() => setConfirm(false)} title="Delete draft" aria-label={`Delete ${item.name}`}>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>
+          {confirm && <span>Delete?</span>}
+        </button>
+      )}
+      <a href={selecting ? undefined : href} onClick={selecting ? (e) => { e.preventDefault(); onPick(); } : undefined} className="mk-card-art">
         <span className="mk-card-frame">
           {item.thumb ? <img src={item.thumb} alt="" loading="lazy" /> : <span className="mk-card-blank">{item.kind === "video" ? <Film /> : <Photo />}</span>}
           {item.kind === "video" && <span className="mk-card-play"><Play /></span>}
@@ -207,7 +278,7 @@ function DraftCard({ item, href, comments, open, approved, onRemove }: { item: M
             <div className="mk-pop" onMouseLeave={() => setMenu(false)}>
               <a href={href}>Open</a>
               <a href={item.download} download={item.name}>Download original</a>
-              <button className="danger" onClick={() => { setMenu(false); onRemove(); }}>Remove from review</button>
+              <button className="danger" onClick={() => { setMenu(false); setConfirm(true); }}>Delete draft…</button>
             </div>
           )}
         </div>
@@ -216,8 +287,8 @@ function DraftCard({ item, href, comments, open, approved, onRemove }: { item: M
   );
 }
 
-function ReviewSettings({ p, brands, demo, onSave, say, onDeleted }: {
-  p: P; brands: { id: string; name: string }[]; demo: boolean;
+function ReviewSettings({ p, brands, folders, onMove, demo, onSave, say, onDeleted }: {
+  p: P; brands: { id: string; name: string }[]; folders: Folder[]; onMove: (folderId: string) => void; demo: boolean;
   onSave: (patch: Partial<GallerySettings> & { title?: string }) => Promise<boolean>; say: (t: string) => void; onDeleted: () => void;
 }) {
   const [f, setF] = useState({
@@ -247,6 +318,13 @@ function ReviewSettings({ p, brands, demo, onSave, say, onDeleted }: {
       <form className="mk-panel" onSubmit={submit}>
         <h3>Review settings</h3>
         <label className="field"><span>Project name</span><input required value={f.title} onChange={set("title")} /></label>
+        <label className="field"><span>Folder</span>
+          <select value={p.group?.id ?? ""} onChange={(e) => onMove(e.target.value)} disabled={demo}>
+            <option value="">No folder</option>
+            {folders.map((fo) => <option key={fo.id} value={fo.id}>{fo.name}</option>)}
+          </select>
+          <small className="hint">Moves right away. Folders keep a client&apos;s projects together.</small>
+        </label>
         <div className="field-row">
           <label className="field"><span>Client</span><input value={f.client} onChange={set("client")} /></label>
           <label className="field"><span>Client email</span><input value={f.clientEmail} onChange={set("clientEmail")} inputMode="email" /></label>

@@ -14,6 +14,8 @@ export type GalleryRecord = {
   id: string;
   /** "review": a draft project in Markup (CLIENTS/_REVIEWS), never a delivery gallery */
   kind?: "gallery" | "review";
+  /** Markup folder this review project sits in (e.g. a client with several projects) */
+  group?: { id: string; name: string };
   slug: string;
   title: string;
   settings: GallerySettings;
@@ -41,6 +43,9 @@ export const CLIENT_LOGO = "_client-logo";
 export const BRAND_FOLDER = "_brand";
 /** Review projects (Markup) live here, fully apart from delivery galleries. */
 export const REVIEWS_FOLDER = "_REVIEWS";
+/** Marks a folder inside _REVIEWS as a Markup folder (holding projects) rather than a project. */
+export const FOLDER_MARKER = "_folder.json";
+export type ReviewFolder = { id: string; name: string };
 
 export function isExpired(s: GallerySettings, now = new Date()) {
   if (!s.expires) return false;
@@ -85,15 +90,21 @@ export function loadAll(force = false): Promise<GalleryRecord[]> {
   return data;
 }
 
-let reviewCache: { at: number; data: Promise<GalleryRecord[]> } | null = null;
+type ReviewTree = { projects: GalleryRecord[]; folders: ReviewFolder[]; box: string | null };
+let reviewCache: { at: number; data: Promise<ReviewTree> } | null = null;
 
-/** Review projects (Markup). Separate from galleries everywhere: lists, links, portals and the Work page. */
-export function loadReviews(force = false): Promise<GalleryRecord[]> {
+/** Markup's whole tree: folders and the review projects inside them (or loose). */
+export function loadReviewTree(force = false): Promise<ReviewTree> {
   if (!force && reviewCache && Date.now() - reviewCache.at < cacheTtl) return reviewCache.data;
-  const data = isDemo ? import("./demo").then((m) => m.demoReviews()) : loadReviewsFromDrive(force);
+  const data = isDemo ? import("./demo").then((m) => m.demoReviewTree()) : loadReviewsFromDrive(force);
   reviewCache = { at: Date.now(), data };
   data.catch(() => (reviewCache = null));
   return data;
+}
+
+/** Review projects (Markup). Separate from galleries everywhere: lists, links, portals and the Work page. */
+export async function loadReviews(force = false): Promise<GalleryRecord[]> {
+  return (await loadReviewTree(force)).projects;
 }
 
 export async function getReview(slug: string) {
@@ -220,6 +231,7 @@ export type DriveFile = {
   id?: string | null;
   name?: string | null;
   mimeType?: string | null;
+  parents?: string[] | null;
   imageMediaMetadata?: { width?: number | null; height?: number | null; rotation?: number | null } | null;
   videoMediaMetadata?: { width?: number | null; height?: number | null; durationMillis?: string | null } | null;
 };
@@ -236,7 +248,7 @@ export async function listChildren(q: string) {
       supportsAllDrives: true,
       includeItemsFromAllDrives: true,
       fields:
-        "nextPageToken, files(id,name,mimeType,imageMediaMetadata(width,height,rotation),videoMediaMetadata(width,height,durationMillis))",
+        "nextPageToken, files(id,name,mimeType,parents,imageMediaMetadata(width,height,rotation),videoMediaMetadata(width,height,durationMillis))",
     });
     files.push(...((res.data.files as DriveFile[]) ?? []));
     pageToken = res.data.nextPageToken ?? undefined;
@@ -376,12 +388,25 @@ async function loadFolder(folder: DriveFile, kind: "gallery" | "review"): Promis
   };
 }
 
-async function loadReviewsFromDrive(force = false): Promise<GalleryRecord[]> {
+async function loadReviewsFromDrive(force = false): Promise<ReviewTree> {
   const root = await resolveRoot(force);
-  if (!root) return [];
+  if (!root) return { projects: [], folders: [], box: null };
   const [box] = await listChildren(`'${root}' in parents and name='${REVIEWS_FOLDER}' and mimeType='${FOLDER_MIME}' and trashed=false`);
-  if (!box?.id) return [];
-  const folders = await listChildren(`'${box.id}' in parents and mimeType='${FOLDER_MIME}' and trashed=false`);
-  const records = await Promise.all(folders.filter((f) => f.id && f.name).map((f) => loadFolder(f, "review")));
-  return records.sort((a, b) => (b.settings.date ?? "").localeCompare(a.settings.date ?? ""));
+  if (!box?.id) return { projects: [], folders: [], box: null };
+  const top = (await listChildren(`'${box.id}' in parents and mimeType='${FOLDER_MIME}' and trashed=false`)).filter((f) => f.id && f.name);
+  // A folder holding _folder.json is a Markup folder; anything else is a project.
+  const markers = await listChildren(`name='${FOLDER_MARKER}' and trashed=false`).catch(() => [] as DriveFile[]);
+  const markerParents = new Set(markers.flatMap((m) => m.parents ?? []));
+  const folders: ReviewFolder[] = top.filter((f) => markerParents.has(f.id!)).map((f) => ({ id: f.id!, name: f.name! }));
+  const inside = await Promise.all(folders.map((fo) => listChildren(`'${fo.id}' in parents and mimeType='${FOLDER_MIME}' and trashed=false`)));
+  const loose = top.filter((f) => !markerParents.has(f.id!));
+  const records = await Promise.all([
+    ...loose.map((f) => loadFolder(f, "review")),
+    ...folders.flatMap((fo, i) => inside[i].filter((f) => f.id && f.name).map(async (f) => ({ ...(await loadFolder(f, "review")), group: fo }))),
+  ]);
+  return {
+    projects: records.sort((a, b) => (b.settings.date ?? "").localeCompare(a.settings.date ?? "")),
+    folders: folders.sort((a, b) => a.name.localeCompare(b.name)),
+    box: box.id,
+  };
 }

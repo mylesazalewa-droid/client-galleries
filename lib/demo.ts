@@ -70,6 +70,20 @@ export function demoGalleries(): GalleryRecord[] {
   ];
 }
 
+/** Sample Markup tree: one folder (a client) holding a project, plus one loose project. */
+export function demoReviewTree() {
+  const folder = { id: "demo-folder", name: "Harbor Health" };
+  const projects: GalleryRecord[] = demoReviews().map((r) => ({ ...r, group: folder }));
+  const p = sizes.map((_, i) => photo(i));
+  projects.push({
+    kind: "review", id: "demo-4", slug: "spring-gala-recap-a1b2c3", title: "Spring Gala — Recap",
+    settings: { client: "Kalamazoo Arts Council", date: "2026-10-02", reviewStatus: "progress" },
+    sections: [{ id: "demo-4-v1", name: "Version 1" }], extras: [],
+    items: [{ ...film("Gala recap.mp4", 29, 5), section: "demo-4-v1" }, { ...p[7], section: "demo-4-v1" }],
+  } as GalleryRecord);
+  return { projects, folders: [folder, { id: "demo-folder-2", name: "Titan" }], box: "demo-box" };
+}
+
 /** Sample Markup review project, with two versions. */
 export function demoReviews(): GalleryRecord[] {
   const p = sizes.map((_, i) => photo(i));

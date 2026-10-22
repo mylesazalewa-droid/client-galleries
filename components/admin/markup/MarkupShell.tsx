@@ -2,8 +2,9 @@ import Link from "next/link";
 import type { Studio } from "@/lib/types";
 
 /** Markup's own workspace: light, with a left sidebar, separate from the galleries dashboard. */
-export default function MarkupShell({ studio, email, demo, active, counts, children }: {
-  studio: Studio; email: string; demo: boolean; active: "projects" | "archive"; counts?: { projects: number; archived: number };
+export default function MarkupShell({ studio, email, demo, active, counts, folders = [], children }: {
+  studio: Studio; email: string; demo: boolean; active: string; counts?: { projects: number; archived: number };
+  folders?: { id: string; name: string }[];
   children: React.ReactNode;
 }) {
   return (
@@ -20,6 +21,12 @@ export default function MarkupShell({ studio, email, demo, active, counts, child
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 10l9-6 9 6v10H3z" /><path d="M9 20v-6h6v6" /></svg>
             Projects{counts ? <em>{counts.projects}</em> : null}
           </Link>
+          {folders.map((f) => (
+            <Link key={f.id} href={`/admin/reviews?folder=${f.id}`} className={`sub ${active === f.id ? "on" : ""}`}>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" /></svg>
+              {f.name}
+            </Link>
+          ))}
           <Link href="/admin/reviews?archived=1" className={active === "archive" ? "on" : ""}>
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 7h18v4H3zM5 11v9h14v-9M10 15h4" /></svg>
             Archive{counts?.archived ? <em>{counts.archived}</em> : null}

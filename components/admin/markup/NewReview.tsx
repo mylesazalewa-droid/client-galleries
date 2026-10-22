@@ -3,13 +3,13 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 /** "+ New review" button and dialog for Markup. */
-export default function NewReview({ demo }: { demo: boolean }) {
+export default function NewReview({ demo, folders = [], folderId = "" }: { demo: boolean; folders?: { id: string; name: string }[]; folderId?: string }) {
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ title: "", client: "", clientEmail: "", password: "", message: "" });
+  const [f, setF] = useState({ title: "", client: "", clientEmail: "", password: "", message: "", folderId });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const router = useRouter();
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -30,6 +30,14 @@ export default function NewReview({ demo }: { demo: boolean }) {
             <h2 id="nr-title" className="serif">New review</h2>
             <p className="sub">A private page where your client watches drafts and leaves notes. You&apos;ll upload the first version next.</p>
             <label className="field"><span>Project name</span><input required autoFocus value={f.title} onChange={set("title")} placeholder="Harbor Health — Brand Film" /></label>
+            {folders.length > 0 && (
+              <label className="field"><span>Folder</span>
+                <select value={f.folderId} onChange={set("folderId")}>
+                  <option value="">No folder</option>
+                  {folders.map((fo) => <option key={fo.id} value={fo.id}>{fo.name}</option>)}
+                </select>
+              </label>
+            )}
             <div className="field-row">
               <label className="field"><span>Client</span><input value={f.client} onChange={set("client")} placeholder="Harbor Health" /></label>
               <label className="field"><span>Client email (optional)</span><input value={f.clientEmail} onChange={set("clientEmail")} placeholder="name@company.com" inputMode="email" /></label>
