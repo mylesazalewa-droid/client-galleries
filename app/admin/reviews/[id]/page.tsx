@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import AdminShell from "@/components/admin/AdminShell";
+import MarkupShell from "@/components/admin/markup/MarkupShell";
 import ReviewManager from "@/components/admin/markup/ReviewManager";
 import { loadBrand, type Brand } from "@/lib/brand";
 import { studio } from "@/lib/config";
@@ -22,12 +22,12 @@ export default async function ReviewProject({ params }: { params: Promise<{ id: 
   if (!p) notFound();
   const { brand } = await loadBrand().catch(() => ({ brand: {} as Brand }));
   return (
-    <AdminShell studio={studio} email={owner.email} demo={owner.demo} back>
+    <MarkupShell studio={studio} email={owner.email} demo={owner.demo} active={p.hidden ? "archive" : "projects"}>
       <ReviewManager
         demo={owner.demo}
         brands={(brand.profiles ?? []).map((b) => ({ id: b.id, name: b.name }))}
         project={{ id: p.id, slug: p.slug, title: p.title, settings: p.settings, hidden: !!p.hidden, items: p.items, sections: p.sections }}
       />
-    </AdminShell>
+    </MarkupShell>
   );
 }

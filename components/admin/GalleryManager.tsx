@@ -281,8 +281,8 @@ export default function GalleryManager({ gallery, demo, activity, stripe, gmail 
 
 // ------------------------------------------------------------------ uploader
 
-export function Uploader({ galleryId, folderId, targetName, demo, onDone, say }: {
-  galleryId: string; folderId?: string; targetName?: string; demo: boolean; onDone: () => Promise<void> | void; say: (t: string) => void;
+export function Uploader({ galleryId, folderId, targetName, demo, onDone, say, compact }: {
+  galleryId: string; folderId?: string; targetName?: string; demo: boolean; onDone: () => Promise<void> | void; say: (t: string) => void; compact?: boolean;
 }) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [over, setOver] = useState(false);
@@ -353,6 +353,54 @@ export function Uploader({ galleryId, folderId, targetName, demo, onDone, say }:
   const total = jobs.length;
   const done = jobs.filter((j) => j.state === "done").length;
 
+  // Compact: an Upload button, with drag-and-drop anywhere on the page.
+  useEffect(() => {
+    if (!compact) return;
+    const over_ = (e: DragEvent) => { if (e.dataTransfer?.types.includes("Files")) { e.preventDefault(); setOver(true); } };
+    const leave = (e: DragEvent) => { if (!e.relatedTarget) setOver(false); };
+    const drop = (e: DragEvent) => { if (e.dataTransfer?.files.length) { e.preventDefault(); setOver(false); add(e.dataTransfer.files); } };
+    window.addEventListener("dragover", over_);
+    window.addEventListener("dragleave", leave);
+    window.addEventListener("drop", drop);
+    return () => { window.removeEventListener("dragover", over_); window.removeEventListener("dragleave", leave); window.removeEventListener("drop", drop); };
+  });
+
+  const queue = total > 0 && (
+    <div className={compact ? "queue queue-float" : "queue"}>
+      <div className="queue-head">
+        <span>Uploading {done} of {total}</span>
+      </div>
+      {jobs.map((j) => (
+        <div key={j.key} className={`job ${j.state}`}>
+          <div className="job-row">
+            <span className="job-name">{j.name}</span>
+            <span className="job-state">
+              {j.state === "done" ? <Check /> : j.state === "error" ? j.error : j.state === "waiting" ? "Waiting" : `${Math.round(j.progress * 100)}%`}
+            </span>
+            {j.state === "error" && (
+              <button className="icon-btn" aria-label="Dismiss" onClick={() => setJobs((js) => js.filter((x) => x.key !== j.key))}><Close /></button>
+            )}
+          </div>
+          <div className="bar"><i style={{ width: `${Math.round(j.progress * 100)}%` }} /></div>
+        </div>
+      ))}
+    </div>
+  );
+
+  if (compact) {
+    return (
+      <>
+        <button className="mk-btn primary" onClick={() => input.current?.click()}>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 16V4M7 9l5-5 5 5M5 20h14" /></svg>
+          Upload{targetName ? ` to ${targetName}` : ""}
+        </button>
+        <input ref={input} type="file" multiple accept="image/*,video/*,.srt,.vtt" hidden onChange={(e) => { add(e.target.files); e.target.value = ""; }} />
+        {over && <div className="drop-veil"><div><b>Drop to upload{targetName ? ` to ${targetName}` : ""}</b><span>Films and photos</span></div></div>}
+        {queue}
+      </>
+    );
+  }
+
   return (
     <div className="upl">
       <div
@@ -372,27 +420,7 @@ export function Uploader({ galleryId, folderId, targetName, demo, onDone, say }:
         <input ref={input} type="file" multiple accept="image/*,video/*,.srt,.vtt" hidden onChange={(e) => { add(e.target.files); e.target.value = ""; }} />
       </div>
 
-      {total > 0 && (
-        <div className="queue">
-          <div className="queue-head">
-            <span>Uploading {done} of {total}</span>
-          </div>
-          {jobs.map((j) => (
-            <div key={j.key} className={`job ${j.state}`}>
-              <div className="job-row">
-                <span className="job-name">{j.name}</span>
-                <span className="job-state">
-                  {j.state === "done" ? <Check /> : j.state === "error" ? j.error : j.state === "waiting" ? "Waiting" : `${Math.round(j.progress * 100)}%`}
-                </span>
-                {j.state === "error" && (
-                  <button className="icon-btn" aria-label="Dismiss" onClick={() => setJobs((js) => js.filter((x) => x.key !== j.key))}><Close /></button>
-                )}
-              </div>
-              <div className="bar"><i style={{ width: `${Math.round(j.progress * 100)}%` }} /></div>
-            </div>
-          ))}
-        </div>
-      )}
+      {queue}
     </div>
   );
 }

@@ -23,7 +23,7 @@ export default function NewReview({ demo }: { demo: boolean }) {
 
   return (
     <>
-      <button className="btn primary" onClick={() => setOpen(true)}>+ New review</button>
+      <button className="mk-btn primary" onClick={() => setOpen(true)}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 5v14M5 12h14" /></svg>New review</button>
       {open && (
         <div className="scrim" onClick={(e) => e.target === e.currentTarget && setOpen(false)}>
           <form className="dialog" onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="nr-title">

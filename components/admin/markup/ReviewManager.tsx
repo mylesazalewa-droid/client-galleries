@@ -82,111 +82,137 @@ export default function ReviewManager({ project, brands, demo }: { project: P; b
     "Pause the video anywhere and type a note — it's pinned to that exact moment. Click a photo to pin a note to a spot. Hit Approve on anything that's good to go.",
   ].filter(Boolean).join("\n");
 
+  const STATUS: Record<string, string> = { progress: "In progress", changes: "Needs changes", approved: "Approved" };
+
   return (
-    <div className="mgr">
-      <section className="mgr-head">
-        <div style={{ minWidth: 0 }}>
-          <div className="eyebrow">Markup · {[p.settings.client, p.sections.at(-1)?.name, p.hidden && "Archived"].filter(Boolean).join(" · ") || "Review project"}</div>
-          <h1 className="serif">{p.title}</h1>
+    <>
+      <div className="mk-toolbar">
+        <div className="mk-crumbs inline">
+          <a href="/admin/reviews">Projects</a>
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 6l6 6-6 6" /></svg>
+          <b>{p.title}</b>
+          {p.settings.reviewStatus && <span className={`mk-chip s-${p.settings.reviewStatus}`}><span className="dot" />{STATUS[p.settings.reviewStatus]}</span>}
         </div>
-        <div className="mgr-share">
-          <a className="btn" href={`${link}?as=client`} target="_blank" rel="noreferrer">View as client ↗</a>
-          <a className="btn" href={link} target="_blank" rel="noreferrer">Open & reply ↗</a>
-          <CopyLink path={link} label="Copy review link" />
-          <CopyLink text={invite} label="Copy invite" className="btn primary" />
+        <div className="mk-toolbar-r">
+          <a className="mk-btn ghost" href={`${link}?as=client`} target="_blank" rel="noreferrer">Client view</a>
+          <CopyLink text={invite} label="Copy invite" className="mk-btn" />
+          <CopyLink path={link} label="Copy link" className="mk-btn" />
+          <Uploader compact galleryId={p.id} folderId={ver || undefined} targetName={p.sections.length > 1 ? verName : undefined} demo={demo} onDone={refresh} say={say} />
         </div>
-      </section>
+      </div>
 
-      <nav className="mgr-tabs" role="tablist">
-        {([["drafts", "Drafts"], ["feedback", "Feedback"], ["settings", "Settings"]] as [Tab, string][]).map(([id, label]) => (
-          <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? "on" : ""} onClick={() => pick(id)}>
-            {label}
-            {id === "drafts" && <span className="count">{latestFiles.length}</span>}
-            {id === "feedback" && open.length > 0 && <span className="count">{open.length}</span>}
-          </button>
-        ))}
-      </nav>
-
-      {tab === "drafts" && (
-        <div className="mgr-tab-body wide">
+      <div className="mk-subbar">
+        <div className="mk-tabs" role="tablist">
+          {([["drafts", "Files"], ["feedback", "Comments"], ["settings", "Settings"]] as [Tab, string][]).map(([id, label]) => (
+            <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? "on" : ""} onClick={() => pick(id)}>
+              {label}
+              {id === "drafts" && <em>{latestFiles.length}</em>}
+              {id === "feedback" && open.length > 0 && <em className="hot">{open.length}</em>}
+            </button>
+          ))}
+        </div>
+        {tab === "drafts" && (
           <div className="mk-vers">
             {p.sections.map((s, i) => (
               <button key={s.id} className={`chip ${ver === s.id ? "on" : ""}`} onClick={() => setVer(s.id)}>
-                {s.name}{i === p.sections.length - 1 ? " · latest" : ""}
+                {s.name.replace(/^Version /, "V")}{i === p.sections.length - 1 && p.sections.length > 1 ? " · latest" : ""}
               </button>
             ))}
-            <button className="chip add" onClick={newVersion} disabled={demo}>+ New version</button>
+            <button className="chip add" onClick={newVersion} disabled={demo} title="Start the next round of drafts">+ New version</button>
           </div>
-          <Uploader galleryId={p.id} folderId={ver || undefined} targetName={verName} demo={demo} onDone={refresh} say={say} />
-          {files.length ? (
-            <div className="mgr-grid">
-              {files.map((item) => <DraftThumb key={item.id} item={item} notes={fb?.notes.filter((n) => n.fileId === item.id && !n.resolved).length ?? 0} approved={approved.has(item.id)} onRemove={() => remove(item)} />)}
-            </div>
-          ) : (
-            <div className="empty" style={{ padding: "40px 20px" }}>
-              <div className="serif">No drafts in {verName ?? "this project"} yet</div>
-              Drop films and photos above. Clients only see the newest version unless they switch.
-            </div>
-          )}
-        </div>
+        )}
+      </div>
+
+      {tab === "drafts" && (
+        files.length ? (
+          <div className="mk-cards">
+            {files.map((item) => (
+              <DraftCard
+                key={item.id}
+                item={item}
+                href={`${link}?f=${encodeURIComponent(item.id)}`}
+                comments={fb?.notes.filter((n) => n.fileId === item.id).length ?? 0}
+                open={fb?.notes.filter((n) => n.fileId === item.id && !n.resolved).length ?? 0}
+                approved={approved.has(item.id)}
+                onRemove={() => remove(item)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="mk-blank">
+            <span className="mk-empty-ico" aria-hidden><svg viewBox="0 0 24 24" width="56" height="56" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M12 16V4M7 9l5-5 5 5M5 20h14" /></svg></span>
+            <h2>Upload {verName ? `${verName.toLowerCase()} ` : ""}drafts</h2>
+            <p>Click <b>Upload</b> or drop films and photos anywhere on this page.</p>
+          </div>
+        )
       )}
 
       {tab === "feedback" && (
-        <div className="mgr-tab-body">
-          <div className="panel">
-            <div className="rv-stats">
-              <span><b>{approvedLatest}</b>/{latestFiles.length} approved</span>
-              <span><b>{open.length}</b> open</span>
-              <span><b>{fb ? fb.notes.length - open.length : 0}</b> resolved</span>
-            </div>
-            <p className="hint" style={{ marginTop: 0 }}>To reply or resolve, use <a href={link} target="_blank" rel="noreferrer">Open &amp; reply</a>. Your replies are labeled Studio.</p>
-            {fb === null ? <p className="hint">Loading…</p> : fb.notes.length ? (
-              <ul className="rv-mini">
-                {[...fb.notes].sort((a, b) => Number(a.resolved) - Number(b.resolved) || b.at.localeCompare(a.at)).map((n) => {
-                  const f = p.items.find((i) => i.id === n.fileId);
-                  const v = p.sections.find((s) => s.id === f?.section)?.name;
-                  return (
-                    <li key={n.id} style={{ opacity: n.resolved ? 0.55 : 1 }}>
-                      <span className="rv-mini-file">{[v, f ? nameOf(f) : "File", n.t !== undefined ? formatDuration(n.t) || "0:00" : n.x !== undefined ? "pin" : "", n.resolved ? "resolved" : ""].filter(Boolean).join(" · ")}</span>
-                      <span><b>{n.author}:</b> {n.text}</span>
-                      {n.replies.length > 0 && <span className="rv-mini-file">{plural(n.replies.length, "reply", "replies")}</span>}
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : <p className="hint">No notes yet. Send the review link and they&apos;ll show up here.</p>}
+        <div className="mk-pane">
+          <div className="mk-stat-row">
+            <div><b>{approvedLatest}<small>/{latestFiles.length}</small></b><span>approved</span></div>
+            <div><b>{open.length}</b><span>open comments</span></div>
+            <div><b>{fb ? fb.notes.length - open.length : 0}</b><span>resolved</span></div>
           </div>
+          {fb === null ? <p className="hint">Loading…</p> : fb.notes.length ? (
+            <ul className="mk-list">
+              {[...fb.notes].sort((a, b) => Number(a.resolved) - Number(b.resolved) || b.at.localeCompare(a.at)).map((n) => {
+                const f = p.items.find((i) => i.id === n.fileId);
+                const v = p.sections.find((s) => s.id === f?.section)?.name;
+                return (
+                  <li key={n.id} className={n.resolved ? "done" : ""}>
+                    <a href={`${link}?f=${encodeURIComponent(n.fileId)}`}>
+                      <span className="mk-list-meta">{[v, f ? nameOf(f) : "File", n.t !== undefined ? formatDuration(n.t) || "0:00" : "", n.resolved ? "Resolved" : ""].filter(Boolean).join(" · ")}</span>
+                      <span><b>{n.author}</b> {n.text}</span>
+                      {n.replies.length > 0 && <span className="mk-list-meta">{plural(n.replies.length, "reply", "replies")}</span>}
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : <p className="hint">No comments yet. Send the link and they&apos;ll show up here.</p>}
         </div>
       )}
 
-      {tab === "settings" && <div className="mgr-tab-body"><ReviewSettings p={p} brands={brands} demo={demo} onSave={save} say={say} onDeleted={() => { router.push("/admin/reviews"); router.refresh(); }} /></div>}
+      {tab === "settings" && <div className="mk-pane narrow"><ReviewSettings p={p} brands={brands} demo={demo} onSave={save} say={say} onDeleted={() => { router.push("/admin/reviews"); router.refresh(); }} /></div>}
 
       {toast && <div className="toast" role="status">{toast}</div>}
-    </div>
+    </>
   );
 }
 
-function DraftThumb({ item, notes, approved, onRemove }: { item: MediaItem; notes: number; approved: boolean; onRemove: () => void }) {
-  const [confirm, setConfirm] = useState(false);
+function DraftCard({ item, href, comments, open, approved, onRemove }: { item: MediaItem; href: string; comments: number; open: number; approved: boolean; onRemove: () => void }) {
+  const [menu, setMenu] = useState(false);
   return (
-    <figure className="mthumb">
-      <div className="mthumb-img">
-        {item.thumb ? <img src={item.thumb} alt="" loading="lazy" /> : item.kind === "video" ? <Film /> : <Photo />}
-        {item.kind === "video" && <span className="mthumb-play"><Play />{item.duration ? formatDuration(item.duration) : ""}</span>}
-        <span className="dash-tags" style={{ position: "absolute", top: 8, left: 8 }}>
-          {approved && <span className="tag" style={{ color: "#3fa66b" }}>✓ Approved</span>}
-          {notes > 0 && <span className="tag review">{notes} open</span>}
+    <div className="mk-card">
+      <a href={href} className="mk-card-art">
+        <span className="mk-card-frame">
+          {item.thumb ? <img src={item.thumb} alt="" loading="lazy" /> : <span className="mk-card-blank">{item.kind === "video" ? <Film /> : <Photo />}</span>}
+          {item.kind === "video" && <span className="mk-card-play"><Play /></span>}
         </span>
+      </a>
+      <div className="mk-card-body">
+        <a href={href}><b>{nameOf(item)}</b></a>
+        <span className="mk-card-sub">{item.kind === "video" ? "Film" : "Photo"}{approved ? " · Approved" : ""}</span>
+        <span className="mk-stats">
+          <span title="Approved" className={approved ? "ok" : ""}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12l5 5 9-10" /></svg>{approved ? 1 : 0}</span>
+          <span title="Comments" className={open ? "hot" : ""}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 5h16v11H9l-5 4z" /></svg>{comments}</span>
+          {item.kind === "video" && item.duration ? <span title="Length"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6 3h8l4 4v14H6z" /><path d="M10 11v6l5-3z" /></svg>{formatDuration(item.duration)}</span> : null}
+        </span>
+        <div className="mk-card-menu">
+          <button className="mk-icon" aria-label="More" onClick={() => setMenu(!menu)}>
+            <svg viewBox="0 0 24 24" width="18" height="18"><circle cx="5" cy="12" r="1.8" fill="currentColor" /><circle cx="12" cy="12" r="1.8" fill="currentColor" /><circle cx="19" cy="12" r="1.8" fill="currentColor" /></svg>
+          </button>
+          {menu && (
+            <div className="mk-pop" onMouseLeave={() => setMenu(false)}>
+              <a href={href}>Open</a>
+              <a href={item.download} download={item.name}>Download original</a>
+              <button className="danger" onClick={() => { setMenu(false); onRemove(); }}>Remove from review</button>
+            </div>
+          )}
+        </div>
       </div>
-      <figcaption>
-        <span className="mthumb-name" title={item.name}>{item.name}</span>
-        <span className="mthumb-actions">
-          {confirm
-            ? <><button className="link-btn danger" onClick={onRemove}>Remove?</button><button className="link-btn" onClick={() => setConfirm(false)}>Keep</button></>
-            : <button className="link-btn" onClick={() => setConfirm(true)}>Remove</button>}
-        </span>
-      </figcaption>
-    </figure>
+    </div>
   );
 }
 
@@ -218,7 +244,7 @@ function ReviewSettings({ p, brands, demo, onSave, say, onDeleted }: {
 
   return (
     <>
-      <form className="panel" onSubmit={submit}>
+      <form className="mk-panel" onSubmit={submit}>
         <h3>Review settings</h3>
         <label className="field"><span>Project name</span><input required value={f.title} onChange={set("title")} /></label>
         <div className="field-row">
@@ -239,9 +265,9 @@ function ReviewSettings({ p, brands, demo, onSave, say, onDeleted }: {
         <label className="check"><input type="checkbox" checked={f.downloads} onChange={set("downloads")} /> Let the client download drafts</label>
         <label className="check"><input type="checkbox" checked={f.hidden} onChange={set("hidden")} /> Archive (the review link stops working)</label>
         <p className="hint">Drafts are always watermarked with your brand&apos;s watermark.</p>
-        <div className="actions"><button className="btn primary" disabled={busy || demo}>{busy ? "Saving…" : "Save"}</button></div>
+        <div className="actions"><button className="mk-btn primary" disabled={busy || demo}>{busy ? "Saving…" : "Save"}</button></div>
       </form>
-      <div className="panel danger-zone">
+      <div className="mk-panel danger-zone">
         <h3>Delete review</h3>
         <p className="hint">Moves the project folder and its drafts to your Google Drive trash (restorable for 30 days).</p>
         {del

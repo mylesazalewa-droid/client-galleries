@@ -72,6 +72,7 @@ export async function renderGallery({ params, searchParams }: Props, route: "g" 
           gallery={{ ...toGallery(g, owner), allowDownload: owner || g.settings.downloads === true, watermark: watermarkFor(brand, studio.name, g.settings, profile) }}
           studio={studio}
           owner={owner ? { clientView: `/review/${g.slug}?as=client`, notes } : undefined}
+          review={{ id: g.id, status: g.settings.reviewStatus ?? "", paused: !!g.settings.paused, message: g.settings.message }}
         />
       </div>
     );

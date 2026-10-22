@@ -95,6 +95,8 @@ function cleanSettings(s: GallerySettings): GallerySettings {
   if (s.brandId) out.brandId = s.brandId;
   if (s.mode === "review") out.mode = "review";
   if (s.showcase) out.showcase = true;
+  if (s.reviewStatus && ["progress", "changes", "approved"].includes(s.reviewStatus)) out.reviewStatus = s.reviewStatus;
+  if (s.paused) out.paused = true;
   if (s.blurb?.trim()) out.blurb = s.blurb.trim().slice(0, 300);
   if (s.watermark) out.watermark = s.watermark;
   if (s.watermarkLayout) out.watermarkLayout = s.watermarkLayout;

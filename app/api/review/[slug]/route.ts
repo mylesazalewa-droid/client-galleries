@@ -24,7 +24,16 @@ export async function GET(_req: Request, ctx: Ctx) {
   return Response.json({ ok: true, ...(await feedbackFor(g.id)) }, { headers: { "Cache-Control": "no-store" } });
 }
 
-const CLIENT_ACTIONS: ReviewEvent[] = ["comment", "reply", "resolve", "reopen", "approve", "unapprove"];
+const CLIENT_ACTIONS: string[] = ["comment", "reply", "resolve", "reopen", "approve", "unapprove", "finished"];
+
+async function notifyOwner(title: string, who: string, url: string) {
+  const { ownerEmails } = await import("@/lib/config");
+  const { sendGmail, storedMailerToken } = await import("@/lib/mail");
+  const sender = await storedMailerToken();
+  if (!sender || !ownerEmails[0]) return;
+  const text = `${who} finished reviewing "${title}".\n\nSee their notes: ${url}`;
+  await sendGmail(sender.token, { to: [ownerEmails[0]], subject: `${who} finished reviewing ${title}`, text, html: `<p>${text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>")}</p>`, from: { name: "Markup", email: sender.email } });
+}
 
 /** Adds a note, reply, resolve/reopen, approval — or (owner only) deletes a note. */
 export async function POST(req: Request, ctx: Ctx) {
@@ -33,8 +42,19 @@ export async function POST(req: Request, ctx: Ctx) {
     return Response.json({ ok: false, error: "Not found" }, { status: 404 });
   }
   const body = await req.json().catch(() => ({}));
-  const action = String(body.action ?? "") as ReviewEvent;
+  const action = String(body.action ?? "") as ReviewEvent | "finished";
   if (!(owner ? [...CLIENT_ACTIONS, "delete"] : CLIENT_ACTIONS).includes(action)) return Response.json({ ok: false, error: "Not allowed" }, { status: 403 });
+
+  // "Done reviewing": tell the studio (activity + email), no file needed.
+  if (action === "finished") {
+    const who = String(body.author ?? "").trim().slice(0, 60) || "Your client";
+    await logEvent(req, { galleryId: g.id, title: g.title, event: "Finished reviewing", detail: who }, { wait: true });
+    await notifyOwner(g.title, who, `${new URL(req.url).origin}/admin/reviews/${g.id}`).catch(() => {});
+    return Response.json({ ok: true });
+  }
+  if (!owner && g.settings.paused && (action === "comment" || action === "reply")) {
+    return Response.json({ ok: false, error: "New comments are paused for this project." }, { status: 403 });
+  }
 
   const fileId = String(body.fileId ?? "");
   if (!allFiles(g).some((f) => f.id === fileId) && g.cover?.id !== fileId) return Response.json({ ok: false, error: "That file isn't in this project" }, { status: 400 });

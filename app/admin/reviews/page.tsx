@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import AdminShell from "@/components/admin/AdminShell";
+import MarkupShell from "@/components/admin/markup/MarkupShell";
 import NewReview from "@/components/admin/markup/NewReview";
 import { studio } from "@/lib/config";
-import { formatDuration } from "@/lib/format";
 import { loadReviews } from "@/lib/galleries";
 import { currentOwner } from "@/lib/owner";
 import { feedbackFor } from "@/lib/review";
@@ -12,100 +11,80 @@ import { feedbackFor } from "@/lib/review";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Markup" };
 
-const when = (iso: string) => {
-  const d = new Date(iso);
-  return isNaN(+d) ? "" : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Detroit" });
-};
+const STATUS: Record<string, string> = { progress: "In progress", changes: "Needs changes", approved: "Approved" };
 
-export default async function MarkupHome() {
+function ago(iso?: string) {
+  if (!iso) return "";
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (!isFinite(s)) return "";
+  if (s < 3600) return `${Math.max(1, Math.round(s / 60))} minutes ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} hours ago`;
+  if (s < 86400 * 30) return `${Math.round(s / 86400)} days ago`;
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+export default async function MarkupHome({ searchParams }: { searchParams: Promise<{ archived?: string; q?: string }> }) {
   const owner = await currentOwner();
   if (!owner) redirect("/admin");
-  const records = await loadReviews(true).catch(() => []);
-  const rows = await Promise.all(records.map(async (g) => {
+  const { archived, q } = await searchParams;
+  const all = await loadReviews(true).catch(() => []);
+  const shown = all
+    .filter((g) => (archived ? g.hidden : !g.hidden))
+    .filter((g) => !q || `${g.title} ${g.settings.client ?? ""}`.toLowerCase().includes(q.toLowerCase()));
+  const cards = await Promise.all(shown.map(async (g) => {
     const fb = await feedbackFor(g.id).catch(() => ({ notes: [], approvals: [] }));
     const latest = g.sections.filter((s) => g.items.some((i) => i.section === s.id)).at(-1);
     const files = g.items.filter((i) => i.kind !== "caption" && (!latest || i.section === latest.id));
-    const name = (id: string) => { const f = g.items.find((i) => i.id === id); return f ? f.title ?? f.name.replace(/\.[^.]+$/, "") : "File"; };
     const approved = files.filter((f) => fb.approvals.some((a) => a.fileId === f.id)).length;
-    return { g, files: files.length, version: latest?.name, open: fb.notes.filter((n) => !n.resolved), approved, name };
+    const lastAt = [...fb.notes.map((n) => n.at), ...fb.approvals.map((a) => a.at)].sort().at(-1);
+    const cover = files.find((i) => i.kind === "video") ?? files[0];
+    return { g, files, approved, comments: fb.notes.length, open: fb.notes.filter((n) => !n.resolved).length, version: latest?.name, updated: lastAt ?? (g.settings.date ? `${g.settings.date}T12:00:00` : undefined), cover };
   }));
-  const latest = rows
-    .flatMap((r) => r.open.map((n) => ({ ...n, project: r.g, file: r.name(n.fileId) })))
-    .sort((a, b) => b.at.localeCompare(a.at))
-    .slice(0, 20);
-  const totalOpen = rows.reduce((n, r) => n + r.open.length, 0);
-  const ready = rows.filter((r) => r.files > 0 && r.approved >= r.files).length;
 
   return (
-    <AdminShell studio={studio} email={owner.email} demo={owner.demo}>
-      <div className="admin-head">
-        <div>
-          <div className="eyebrow">Drafts & client feedback</div>
-          <h1 className="serif">Markup</h1>
+    <MarkupShell studio={studio} email={owner.email} demo={owner.demo} active={archived ? "archive" : "projects"} counts={{ projects: all.filter((g) => !g.hidden).length, archived: all.filter((g) => g.hidden).length }}>
+      <div className="mk-toolbar">
+        <form className="mk-search" action="/admin/reviews">
+          {archived && <input type="hidden" name="archived" value="1" />}
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+          <input name="q" defaultValue={q} placeholder="Search projects" />
+        </form>
+        <NewReview demo={owner.demo} />
+      </div>
+      <div className="mk-crumbs">
+        <span>{archived ? "Archive" : "Projects"}</span>
+      </div>
+
+      {cards.length ? (
+        <div className="mk-cards">
+          {cards.map((c) => (
+            <Link key={c.g.id} href={`/admin/reviews/${c.g.id}`} className="mk-card">
+              <span className="mk-card-art">
+                <span className="mk-card-frame">
+                  {c.cover?.thumb ? <img src={c.cover.thumb} alt="" loading="lazy" /> : <span className="mk-card-blank" />}
+                  {c.files.length > 1 && <span className="mk-stack" aria-hidden />}
+                </span>
+                {c.g.settings.reviewStatus && <span className={`mk-chip s-${c.g.settings.reviewStatus}`}><span className="dot" />{STATUS[c.g.settings.reviewStatus]}</span>}
+              </span>
+              <span className="mk-card-body">
+                <b>{c.g.title}</b>
+                <span className="mk-card-sub">{c.updated ? `Updated ${ago(c.updated)}` : "No activity yet"}{c.version ? ` · ${c.version}` : ""}</span>
+                <span className="mk-stats">
+                  <span title="Approved"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12l5 5 9-10" /></svg>{c.approved}</span>
+                  <span title="Comments" className={c.open ? "hot" : ""}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 5h16v11H9l-5 4z" /></svg>{c.comments}</span>
+                  <span title="Files"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v4h4" /></svg>{c.files.length}</span>
+                </span>
+              </span>
+            </Link>
+          ))}
         </div>
-        <div className="admin-head-actions"><NewReview demo={owner.demo} /></div>
-      </div>
-
-      <div className="stat-row">
-        <div className="stat"><b>{rows.length}</b><span>review projects</span></div>
-        <div className="stat"><b>{totalOpen}</b><span>open notes to address</span></div>
-        <div className="stat"><b>{ready}</b><span>fully approved</span></div>
-      </div>
-
-      {rows.length ? (
-        <>
-          <section className="page-sec">
-            <h2>Projects</h2>
-            <div className="mk-grid">
-              {rows.map((r) => {
-                const cover = (r.g.items.filter((i) => i.kind !== "caption").at(-1) ?? r.g.items[0])?.thumb;
-                const done = r.files > 0 && r.approved >= r.files;
-                return (
-                  <Link key={r.g.id} href={`/admin/reviews/${r.g.id}`} className="mk-card">
-                    <span className="mk-img">
-                      {cover ? <img src={cover} alt="" loading="lazy" /> : <span className="mk-empty">No drafts yet</span>}
-                      <span className="dash-tags">
-                        {r.version && <span className="tag">{r.version}</span>}
-                        {r.g.hidden && <span className="tag">Archived</span>}
-                      </span>
-                    </span>
-                    <span className="mk-body">
-                      <b>{r.g.title}</b>
-                      <span className="lr-sub">{r.g.settings.client || "No client set"}</span>
-                      <span className="mk-meta">
-                        {done ? <span className="mk-ok">✓ All approved</span> : r.open.length ? <span className="mk-open">{r.open.length} open note{r.open.length === 1 ? "" : "s"}</span> : <span>Waiting on client</span>}
-                        <span>{r.approved}/{r.files} approved</span>
-                      </span>
-                    </span>
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-
-          <section className="page-sec">
-            <h2>Latest open notes</h2>
-            {latest.length ? (
-              <div className="list-page">
-                {latest.map((n) => (
-                  <Link key={n.id} href={`/admin/reviews/${n.project.id}`} className="list-row" style={{ alignItems: "flex-start" }}>
-                    <span className="lr-main">
-                      <span className="lr-sub" style={{ display: "block" }}>{n.project.title} · {n.file}{n.t !== undefined ? ` · ${formatDuration(n.t) || "0:00"}` : n.x !== undefined ? " · pin" : ""}</span>
-                      <span style={{ display: "block", marginTop: 3 }}><b>{n.author}:</b> {n.text}</span>
-                      <span className="lr-sub">{when(n.at)}{n.replies.length ? ` · ${n.replies.length} repl${n.replies.length === 1 ? "y" : "ies"}` : ""}</span>
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            ) : <p className="hint">No open notes. You&apos;re all caught up.</p>}
-          </section>
-        </>
       ) : (
-        <div className="empty" style={{ padding: "50px 20px" }}>
-          <div className="serif">No reviews yet</div>
-          Start one with <b>+ New review</b>, upload a draft, and send your client the link. They leave notes right on the video.
+        <div className="mk-blank">
+          <span className="mk-empty-ico" aria-hidden><svg viewBox="0 0 48 40" width="72" height="60"><rect x="6" y="4" width="36" height="24" rx="3" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M20 28l4 6 4-6" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M12 12h18M12 18h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>
+          <h2>{q ? "No matching projects" : archived ? "Nothing archived" : "No reviews yet"}</h2>
+          <p>{archived || q ? "" : "Create a review, upload a draft and send your client the link. They click right on the video to leave comments."}</p>
         </div>
       )}
-    </AdminShell>
+    </MarkupShell>
   );
 }

@@ -51,6 +51,10 @@ export type GallerySettings = {
   picks?: boolean;
   /** show this project on the public Work page of the website */
   showcase?: boolean;
+  /** Markup: status shown at the top of the review page */
+  reviewStatus?: "progress" | "changes" | "approved";
+  /** Markup: stop clients adding new comments */
+  paused?: boolean;
   /** one-line description for the Work page */
   blurb?: string;
   /** let clients share a link to a single film (default on) */
