@@ -2,7 +2,7 @@ import "server-only";
 import { ACTIVITY_NAME, findActivitySheet, HEADERS, rememberActivitySheet, SHEET_MIME } from "./activity";
 import { BRAND_FILE } from "./brand";
 import { rootFolderName } from "./config";
-import { BRAND_FOLDER, clearCache, resolveRoot, SETTINGS_FILE } from "./galleries";
+import { BRAND_FOLDER, clearCache, resolveRoot, REVIEWS_FOLDER, SETTINGS_FILE } from "./galleries";
 import { sheets } from "./google";
 import type { GallerySettings } from "./types";
 
@@ -126,6 +126,22 @@ export async function createGallery(token: string, title: string, settings: Gall
     body: JSON.stringify({ name: title.trim(), mimeType: FOLDER, parents: [root] }),
   });
   await writeSettings(token, folder.id, undefined, settings);
+  clearCache();
+  return folder.id;
+}
+
+/** Creates a Markup review project in CLIENTS/_REVIEWS, with a "Version 1" folder ready for drafts. */
+export async function createReview(token: string, title: string, settings: GallerySettings) {
+  const root = await ensureRoot(token);
+  const box =
+    (await ownerFind(token, `name='${REVIEWS_FOLDER}' and '${root}' in parents and mimeType='${FOLDER}' and trashed=false`)) ??
+    (await call<{ id: string }>(token, `${API}/files?fields=id`, { method: "POST", body: JSON.stringify({ name: REVIEWS_FOLDER, mimeType: FOLDER, parents: [root] }) })).id;
+  const folder = await call<{ id: string }>(token, `${API}/files?fields=id`, {
+    method: "POST",
+    body: JSON.stringify({ name: title.trim(), mimeType: FOLDER, parents: [box] }),
+  });
+  await writeSettings(token, folder.id, undefined, settings);
+  await call(token, `${API}/files?fields=id`, { method: "POST", body: JSON.stringify({ name: "Version 1", mimeType: FOLDER, parents: [folder.id] }) });
   clearCache();
   return folder.id;
 }

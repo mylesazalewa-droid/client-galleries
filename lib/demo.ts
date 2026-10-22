@@ -67,15 +67,23 @@ export function demoGalleries(): GalleryRecord[] {
       extras: [],
       items: [p[6], p[7], p[8], p[10], p[11], film("Conference recap.mp4", 22, 5)].map((x) => ({ ...x, section: "" })),
     },
+  ];
+}
+
+/** Sample Markup review project, with two versions. */
+export function demoReviews(): GalleryRecord[] {
+  const p = sizes.map((_, i) => photo(i));
+  const v = (x: MediaItem, section: string) => ({ ...x, section });
+  return [
     {
+      kind: "review",
       id: "demo-3",
       slug: "harbor-health-rough-cut",
-      title: "Harbor Health — Rough Cut v2",
-      settings: { client: "Harbor Health", date: "2026-10-14", mode: "review", message: "Here's the second cut. Leave notes right on the film and stills." },
-      cover: p[1],
-      sections: [],
+      title: "Harbor Health — Brand Film",
+      settings: { client: "Harbor Health", date: "2026-10-14", message: "Here's the second cut. Leave notes right on the film and stills." },
+      sections: [{ id: "demo-v1", name: "Version 1" }, { id: "demo-v2", name: "Version 2" }],
       extras: [],
-      items: [film("Rough cut v2.mp4", 27, 5), p[1], p[3], p[5]].map((x) => ({ ...x, section: "" })),
+      items: [v(film("Rough cut v1.mp4", 25, 5), "demo-v1"), v(film("Rough cut v2.mp4", 27, 5), "demo-v2"), v(p[1], "demo-v2"), v(p[3], "demo-v2"), v(p[5], "demo-v2")],
     },
   ];
 }

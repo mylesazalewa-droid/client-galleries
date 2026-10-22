@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 
 const LINKS = [
   { href: "/admin", label: "Galleries", match: (p: string) => p === "/admin" || p.startsWith("/admin/g/") },
-  { href: "/admin/reviews", label: "Reviews", match: (p: string) => p.startsWith("/admin/reviews") },
+  { href: "/admin/reviews", label: "Markup", match: (p: string) => p.startsWith("/admin/reviews") },
   { href: "/admin/payments", label: "Payments", match: (p: string) => p.startsWith("/admin/payments") },
   { href: "/admin/brands", label: "Client brands", match: (p: string) => p.startsWith("/admin/brands") },
   { href: "/admin/brand", label: "My branding", match: (p: string) => p === "/admin/brand" },

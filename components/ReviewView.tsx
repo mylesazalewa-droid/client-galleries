@@ -21,13 +21,19 @@ const titleOf = (i: MediaItem) => i.title ?? i.name.replace(/\.[^.]+$/, "");
 
 /**
  * Review page for drafts: timestamped notes on films, pinned notes on photos,
- * replies, resolve, and approve. Shown instead of the delivery page when a gallery is in Review mode.
+ * replies, resolve, and approve. Markup review projects only; never used for delivery galleries.
  */
 export default function ReviewView({ gallery, studio, owner }: {
   gallery: Gallery; studio: Studio;
   owner?: { clientView: string; notes: string[] };
 }) {
-  const items = useMemo(() => gallery.items.filter((i) => i.kind !== "caption"), [gallery.items]);
+  // Versions are the project's subfolders ("Version 1", "Version 2"…); the newest opens first.
+  const versions = useMemo(() => gallery.sections.filter((s) => gallery.items.some((i) => i.section === s.id)), [gallery.sections, gallery.items]);
+  const [ver, setVer] = useState(versions.at(-1)?.id ?? "");
+  const items = useMemo(
+    () => gallery.items.filter((i) => i.kind !== "caption" && (!versions.length || i.section === ver)),
+    [gallery.items, versions.length, ver],
+  );
   const [index, setIndex] = useState(0);
   const item = items[index];
   const [fb, setFb] = useState<Feedback>({ notes: [], approvals: [] });
@@ -61,7 +67,7 @@ export default function ReviewView({ gallery, studio, owner }: {
 
   useEffect(() => {
     setAt(null); setPin(null); setDraft(""); setDuration(0); setAspect(undefined); setActive(null); setError("");
-  }, [index]);
+  }, [index, ver]);
 
   const notesFor = (id: string) => fb.notes.filter((n) => n.fileId === id);
   const approvalFor = (id: string) => fb.approvals.find((a) => a.fileId === id);
@@ -130,7 +136,7 @@ export default function ReviewView({ gallery, studio, owner }: {
     <div className="rv">
       {owner && (
         <div className="owner-bar">
-          <span><b>Owner view · Review mode.</b> Your replies post as {studio.name}. {owner.notes.join(" ")}</span>
+          <span><b>Owner view.</b> Your replies post as {studio.name}. {owner.notes.join(" ")}</span>
           <a className="btn" href={owner.clientView}>See what clients see</a>
         </div>
       )}
@@ -139,6 +145,12 @@ export default function ReviewView({ gallery, studio, owner }: {
         <div className="rv-title">
           <span className="rv-pill">Review</span>
           <b>{gallery.title}</b>
+          {versions.length > 1 && (
+            <select className="rv-ver" value={ver} onChange={(e) => { setVer(e.target.value); setIndex(0); }} aria-label="Version">
+              {versions.map((v, i) => <option key={v.id} value={v.id}>{v.name}{i === versions.length - 1 ? " (latest)" : ""}</option>)}
+            </select>
+          )}
+          {versions.length === 1 && <span className="rv-ver-tag">{versions[0].name}</span>}
         </div>
         <div className="rv-top-right">
           <span className="rv-progress">{approvedCount}/{items.length} approved{openTotal ? ` · ${openTotal} open note${openTotal === 1 ? "" : "s"}` : ""}</span>

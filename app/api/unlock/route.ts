@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { cookieName, passwordMatches, tokenFor } from "@/lib/access";
 import { logEvent } from "@/lib/activity";
-import { getRecord } from "@/lib/galleries";
+import { getRecord, getReview } from "@/lib/galleries";
 
 export const runtime = "nodejs";
 
@@ -17,7 +17,7 @@ export async function POST(req: Request) {
   if (t && t.n >= 8 && Date.now() < t.until) {
     return Response.json({ ok: false, error: "Too many tries. Wait a few minutes and try again." }, { status: 429 });
   }
-  const g = typeof slug === "string" ? await getRecord(slug) : null;
+  const g = typeof slug === "string" ? (await getRecord(slug)) ?? (await getReview(slug)) : null;
   if (!g) return Response.json({ ok: false, error: "Gallery not found" }, { status: 404 });
 
   // Small fixed delay makes guessing slower.

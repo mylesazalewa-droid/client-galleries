@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import Closed from "@/components/Closed";
 import GalleryView from "@/components/GalleryView";
 import LockScreen from "@/components/LockScreen";
@@ -7,15 +7,15 @@ import ReviewView from "@/components/ReviewView";
 import { canView } from "@/lib/access";
 import { brandFor, themeStyle, watermarkFor } from "@/lib/brand";
 import { formatDate } from "@/lib/format";
-import { getRecord, isExpired, loadAll, toGallery } from "@/lib/galleries";
+import { getRecord, getReview, isExpired, loadAll, loadReviews, toGallery } from "@/lib/galleries";
 import { currentOwner } from "@/lib/owner";
 import { forgetPayments } from "@/lib/payments";
 
 export type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ as?: string; paid?: string }> };
 
-export async function galleryMetadata({ params }: Props): Promise<Metadata> {
+export async function galleryMetadata({ params }: Props, route: "g" | "review" = "g"): Promise<Metadata> {
   const { slug } = await params;
-  const g = await getRecord(slug);
+  const g = route === "review" ? await getReview(slug) : await getRecord(slug);
   if (!g) return {};
   const description = g.settings.client ? `Prepared for ${g.settings.client}` : undefined;
   const image = `/api/og?g=${slug}`;
@@ -28,7 +28,7 @@ export async function galleryMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-/** Finished galleries live at /g/…, drafts in review at /review/…; each address sends the other kind to the right place. */
+/** Delivery galleries live at /g/…; Markup review projects at /review/…. They never share records. */
 export async function renderGallery({ params, searchParams }: Props, route: "g" | "review") {
   const { slug } = await params;
   const { as, paid } = await searchParams;
@@ -36,16 +36,14 @@ export async function renderGallery({ params, searchParams }: Props, route: "g" 
   // "?as=client" lets the owner see exactly what a client sees.
   const owner = signedIn && as !== "client";
 
-  let g = (await getRecord(slug)) ?? (signedIn ? (await loadAll()).find((r) => r.slug === slug) ?? null : null);
+  const list = route === "review" ? loadReviews : loadAll;
+  let g = (route === "review" ? await getReview(slug) : await getRecord(slug)) ?? (signedIn ? (await list()).find((r) => r.slug === slug) ?? null : null);
   // Just back from Stripe: re-check payments so the gallery opens unlocked.
-  if (g && paid === "1" && g.settings.hold) {
+  if (g && route === "g" && paid === "1" && g.settings.hold) {
     forgetPayments();
     g = (await loadAll(true)).find((r) => r.slug === slug) ?? g;
   }
   if (!g) notFound();
-  const inReview = g.settings.mode === "review";
-  if (route === "g" && inReview) redirect(`/review/${g.slug}${as ? `?as=${as}` : ""}`);
-  if (route === "review" && !inReview) redirect(`/g/${g.slug}${as ? `?as=${as}` : ""}`);
   const { studio, brand, profile } = await brandFor(g.settings);
   const theme = themeStyle(studio);
 
@@ -66,12 +64,12 @@ export async function renderGallery({ params, searchParams }: Props, route: "g" 
       ].filter((x): x is string => !!x)
     : [];
 
-  if (g.settings.mode === "review") {
+  if (route === "review") {
     // Drafts: always watermarked so review copies can't stand in for finals.
     return (
       <div style={theme}>
         <ReviewView
-          gallery={{ ...toGallery(g, owner), watermark: watermarkFor(brand, studio.name, g.settings, profile) }}
+          gallery={{ ...toGallery(g, owner), allowDownload: owner || g.settings.downloads === true, watermark: watermarkFor(brand, studio.name, g.settings, profile) }}
           studio={studio}
           owner={owner ? { clientView: `/review/${g.slug}?as=client`, notes } : undefined}
         />

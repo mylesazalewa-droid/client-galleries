@@ -152,13 +152,12 @@ components/Lightbox.tsx     viewer with gestures, notes, downloads
 lib/galleries.ts            reads folders/files from Drive (and demo data)
 ```
 
-## Client review (drafts)
+## Markup (draft review)
 
-Turn on **Client review** in a gallery's dashboard panel to send drafts for feedback before delivery. The same gallery link opens a review page instead of the download page:
+Markup is completely separate from delivery galleries. In the dashboard, open **Markup → + New review**. Each review project is a folder in `CLIENTS/_REVIEWS` with version subfolders (`Version 1`, `Version 2`…).
 
-- Films: pause and write a note to pin it to that moment. Notes show as numbered markers under the player; click one to jump there.
-- Photos: click the photo to drop a numbered pin.
-- Replies, mark resolved / reopen, and **Approve** per file (shows who approved).
-- Previews are always watermarked with the gallery's brand watermark. Password, expiry and white-label brand still apply.
-- Notes are saved as rows in a **Feedback** tab of the activity spreadsheet.
-- When everything's approved, click **Switch to delivery**. Notes stay saved.
+- Upload drafts into a version; **+ New version** starts the next round. Clients see the newest version and can switch back.
+- Clients open `/review/<project>` (or the **Review** tab on the website): notes pinned to a moment in a film, pins on photos, replies, resolve and **Approve**.
+- Drafts are always watermarked and can't be downloaded unless you turn that on.
+- Notes are saved in the **Feedback** tab of the activity spreadsheet.
+- Galleries (`/g/…`) are for delivery only. When a project is approved, create a delivery gallery and upload the finals there.

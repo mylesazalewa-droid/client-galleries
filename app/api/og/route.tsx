@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 import { brandFor, loadBrand, getStudio, type Brand } from "@/lib/brand";
 import { isDemo } from "@/lib/config";
 import { formatDate } from "@/lib/format";
-import { getRecord, isExpired, toGallery } from "@/lib/galleries";
+import { getRecord, getReview, isExpired, toGallery } from "@/lib/galleries";
 import { serveImage } from "@/lib/serve";
 import { shareAllowed, validKey } from "@/lib/share";
 
@@ -44,7 +44,7 @@ async function serif(text: string) {
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const g = await getRecord(url.searchParams.get("g") ?? "");
+  const g = (await getRecord(url.searchParams.get("g") ?? "")) ?? (await getReview(url.searchParams.get("g") ?? ""));
   const { studio, brand, profile } = g ? await brandFor(g.settings) : { studio: await getStudio(), brand: (await loadBrand().catch(() => ({ brand: {} as Brand }))).brand, profile: undefined };
   const origin = url.origin;
 

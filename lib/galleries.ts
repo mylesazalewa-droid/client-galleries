@@ -12,6 +12,8 @@ import { groupVersions } from "./versions";
  */
 export type GalleryRecord = {
   id: string;
+  /** "review": a draft project in Markup (CLIENTS/_REVIEWS), never a delivery gallery */
+  kind?: "gallery" | "review";
   slug: string;
   title: string;
   settings: GallerySettings;
@@ -37,6 +39,8 @@ export const CLIENT_LOGO = "_client-logo";
 
 /** Folders/files inside CLIENTS that aren't galleries. */
 export const BRAND_FOLDER = "_brand";
+/** Review projects (Markup) live here, fully apart from delivery galleries. */
+export const REVIEWS_FOLDER = "_REVIEWS";
 
 export function isExpired(s: GallerySettings, now = new Date()) {
   if (!s.expires) return false;
@@ -81,8 +85,24 @@ export function loadAll(force = false): Promise<GalleryRecord[]> {
   return data;
 }
 
+let reviewCache: { at: number; data: Promise<GalleryRecord[]> } | null = null;
+
+/** Review projects (Markup). Separate from galleries everywhere: lists, links, portals and the Work page. */
+export function loadReviews(force = false): Promise<GalleryRecord[]> {
+  if (!force && reviewCache && Date.now() - reviewCache.at < cacheTtl) return reviewCache.data;
+  const data = isDemo ? import("./demo").then((m) => m.demoReviews()) : loadReviewsFromDrive(force);
+  reviewCache = { at: Date.now(), data };
+  data.catch(() => (reviewCache = null));
+  return data;
+}
+
+export async function getReview(slug: string) {
+  return (await loadReviews()).find((r) => r.slug === slug && !r.hidden) ?? null;
+}
+
 export function clearCache() {
   cache = null;
+  reviewCache = null;
   rootCache = null;
 }
 
@@ -94,11 +114,13 @@ export async function getRecord(slug: string) {
 
 /** Dashboard lookup by Drive folder ID (includes drafts). */
 export async function getRecordById(id: string, force = false) {
-  let found = (await loadAll(force)).find((g) => g.id === id) ?? null;
+  const look = async (f: boolean) =>
+    (await loadAll(f)).find((g) => g.id === id) ?? (await loadReviews(f)).find((g) => g.id === id) ?? null;
+  let found = await look(force);
   // Drive can take a moment to list a folder that was just created; look again before giving up.
   for (let i = 0; !found && i < 3; i++) {
     if (i > 0 || force) await new Promise((r) => setTimeout(r, 1200));
-    found = (await loadAll(true)).find((g) => g.id === id) ?? null;
+    found = await look(true);
   }
   return found;
 }
@@ -106,7 +128,7 @@ export async function getRecordById(id: string, force = false) {
 /** Look up a file only within the given gallery, so file IDs can't reach anything else in Drive. */
 export async function findItem(slug: string, id: string) {
   // Includes drafts so the dashboard can show their thumbnails; the link code + file ID are both unguessable.
-  const g = (await loadAll()).find((r) => r.slug === slug);
+  const g = (await loadAll()).find((r) => r.slug === slug) ?? (await loadReviews()).find((r) => r.slug === slug);
   if (!g) return null;
   const item = g.items.find((i) => i.id === id) ?? g.extras.find((i) => i.id === id) ?? (g.cover?.id === id ? g.cover : undefined);
   return item ? { gallery: g, item } : null;
@@ -291,49 +313,7 @@ async function loadFromDrive(force = false): Promise<GalleryRecord[]> {
   );
 
   const records = await Promise.all(
-    folders
-      .filter((f) => f.id && f.name && f.name !== BRAND_FOLDER)
-      .map(async (folder): Promise<GalleryRecord> => {
-        const title = folder.name!.replace(/^_+\s*/, "");
-        const slug = slugFor(title, folder.id!);
-        const files = await listChildren(`'${folder.id}' in parents and trashed=false`);
-        const settingsFile = files.find((f) => f.name === SETTINGS_FILE);
-        const visible = (f: DriveFile) => !f.name?.startsWith("_") && !f.name?.startsWith(".");
-
-        // Subfolders are sections ("Final cuts", "Social versions", "Stills"…), in name order.
-        const sectionFolders = files.filter((f) => f.mimeType === FOLDER_MIME && f.id && visible(f));
-        const [settings, sectionFiles] = await Promise.all([
-          settingsFile?.id ? readSettings(settingsFile.id) : Promise.resolve({} as GallerySettings),
-          Promise.all(sectionFolders.map((sf) => listChildren(`'${sf.id}' in parents and trashed=false`))),
-        ]);
-        const sections: Section[] = sectionFolders.map((sf) => ({ id: sf.id!, name: sf.name! }));
-
-        const all = [
-          ...files.filter(visible).map((f) => toItem(f, slug)),
-          ...sectionFolders.flatMap((sf, i) => sectionFiles[i].filter(visible).map((f) => toItem(f, slug, sf.id!))),
-        ].filter((x): x is MediaItem => !!x);
-        // Formats of the same film collapse into one item; captions attach to their film.
-        const { items: media, extras } = groupVersions(
-          all.filter((i) => i.kind !== "caption"),
-          all.filter((i) => i.kind === "caption"),
-        );
-        const clientLogo = files.find((f) => f.name?.startsWith(CLIENT_LOGO) && IMAGE.test(f.mimeType ?? ""));
-
-        // A file named cover.* (or the one named in gallery.json) becomes the hero, not a grid item.
-        const coverName = settings.cover?.toLowerCase();
-        const isCover = (i: MediaItem) =>
-          i.kind === "photo" &&
-          (coverName ? i.name.toLowerCase() === coverName : /^cover\.[a-z]+$/i.test(i.name));
-        const cover = media.find(isCover);
-        const items = settings.cover ? media : media.filter((i) => i !== cover);
-
-        const hidden = folder.name!.startsWith("_") || settings.hidden === true;
-        return {
-          id: folder.id!, slug, title, settings, items, cover, hidden, sections, extras,
-          clientLogoId: clientLogo?.id ?? undefined,
-          settingsFileId: settingsFile?.id ?? undefined,
-        };
-      }),
+    folders.filter((f) => f.id && f.name && f.name !== BRAND_FOLDER && f.name !== REVIEWS_FOLDER).map((f) => loadFolder(f, "gallery")),
   );
 
   // Galleries paid through Stripe come off hold automatically (split requests once every part is paid).
@@ -350,5 +330,58 @@ async function loadFromDrive(force = false): Promise<GalleryRecord[]> {
     }
   }
 
+  return records.sort((a, b) => (b.settings.date ?? "").localeCompare(a.settings.date ?? ""));
+}
+
+/** Reads one project folder: its settings, files, sections (or versions, for reviews) and logo. */
+async function loadFolder(folder: DriveFile, kind: "gallery" | "review"): Promise<GalleryRecord> {
+  const title = folder.name!.replace(/^_+\s*/, "");
+  const slug = slugFor(title, folder.id!);
+  const files = await listChildren(`'${folder.id}' in parents and trashed=false`);
+  const settingsFile = files.find((f) => f.name === SETTINGS_FILE);
+  const visible = (f: DriveFile) => !f.name?.startsWith("_") && !f.name?.startsWith(".");
+
+  // Subfolders are sections ("Final cuts", "Social versions", "Stills"…), in name order.
+  const sectionFolders = files.filter((f) => f.mimeType === FOLDER_MIME && f.id && visible(f));
+  const [settings, sectionFiles] = await Promise.all([
+    settingsFile?.id ? readSettings(settingsFile.id) : Promise.resolve({} as GallerySettings),
+    Promise.all(sectionFolders.map((sf) => listChildren(`'${sf.id}' in parents and trashed=false`))),
+  ]);
+  const sections: Section[] = sectionFolders.map((sf) => ({ id: sf.id!, name: sf.name! }));
+
+  const all = [
+    ...files.filter(visible).map((f) => toItem(f, slug)),
+    ...sectionFolders.flatMap((sf, i) => sectionFiles[i].filter(visible).map((f) => toItem(f, slug, sf.id!))),
+  ].filter((x): x is MediaItem => !!x);
+  // Formats of the same film collapse into one item; captions attach to their film.
+  const { items: media, extras } = groupVersions(
+    all.filter((i) => i.kind !== "caption"),
+    all.filter((i) => i.kind === "caption"),
+  );
+  const clientLogo = files.find((f) => f.name?.startsWith(CLIENT_LOGO) && IMAGE.test(f.mimeType ?? ""));
+
+  // A file named cover.* (or the one named in gallery.json) becomes the hero, not a grid item.
+  const coverName = settings.cover?.toLowerCase();
+  const isCover = (i: MediaItem) =>
+    i.kind === "photo" &&
+    (coverName ? i.name.toLowerCase() === coverName : /^cover\.[a-z]+$/i.test(i.name));
+  const cover = media.find(isCover);
+  const items = settings.cover ? media : media.filter((i) => i !== cover);
+
+  const hidden = folder.name!.startsWith("_") || settings.hidden === true;
+  return {
+    kind, id: folder.id!, slug, title, settings, items, cover, hidden, sections, extras,
+    clientLogoId: clientLogo?.id ?? undefined,
+    settingsFileId: settingsFile?.id ?? undefined,
+  };
+}
+
+async function loadReviewsFromDrive(force = false): Promise<GalleryRecord[]> {
+  const root = await resolveRoot(force);
+  if (!root) return [];
+  const [box] = await listChildren(`'${root}' in parents and name='${REVIEWS_FOLDER}' and mimeType='${FOLDER_MIME}' and trashed=false`);
+  if (!box?.id) return [];
+  const folders = await listChildren(`'${box.id}' in parents and mimeType='${FOLDER_MIME}' and trashed=false`);
+  const records = await Promise.all(folders.filter((f) => f.id && f.name).map((f) => loadFolder(f, "review")));
   return records.sort((a, b) => (b.settings.date ?? "").localeCompare(a.settings.date ?? ""));
 }

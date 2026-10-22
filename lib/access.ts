@@ -35,7 +35,8 @@ export async function viewerState(g: GalleryRecord) {
     owner,
     expired: !owner && isExpired(g.settings),
     hold: !owner && !!g.settings.hold,
-    canDownload: owner || (g.settings.downloads !== false && !g.settings.hold),
+    // Review drafts download only when you turn it on; delivery galleries unless you turn it off.
+    canDownload: owner || (g.kind === "review" ? g.settings.downloads === true : g.settings.downloads !== false && !g.settings.hold),
   };
 }
 

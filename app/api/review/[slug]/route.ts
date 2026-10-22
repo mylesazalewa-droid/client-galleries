@@ -1,7 +1,7 @@
 import { canView } from "@/lib/access";
 import { logEvent } from "@/lib/activity";
 import { brandFor } from "@/lib/brand";
-import { allFiles, getRecord, isExpired, loadAll } from "@/lib/galleries";
+import { allFiles, getReview, isExpired, loadReviews } from "@/lib/galleries";
 import { readSession } from "@/lib/owner";
 import { addRow, feedbackFor, type ReviewEvent } from "@/lib/review";
 
@@ -11,14 +11,14 @@ type Ctx = { params: Promise<{ slug: string }> };
 
 async function load(slug: string) {
   const owner = !!(await readSession());
-  const g = (await getRecord(slug)) ?? (owner ? (await loadAll()).find((r) => r.slug === slug) ?? null : null);
+  const g = (await getReview(slug)) ?? (owner ? (await loadReviews()).find((r) => r.slug === slug) ?? null : null);
   return { g, owner };
 }
 
 /** Notes, replies and approvals for a review gallery. */
 export async function GET(_req: Request, ctx: Ctx) {
   const { g, owner } = await load((await ctx.params).slug);
-  if (!g || (!owner && (g.settings.mode !== "review" || isExpired(g.settings) || !(await canView(g))))) {
+  if (!g || (!owner && (isExpired(g.settings) || !(await canView(g))))) {
     return Response.json({ ok: false, error: "Not found" }, { status: 404 });
   }
   return Response.json({ ok: true, ...(await feedbackFor(g.id)) }, { headers: { "Cache-Control": "no-store" } });
@@ -29,7 +29,7 @@ const CLIENT_ACTIONS: ReviewEvent[] = ["comment", "reply", "resolve", "reopen", 
 /** Adds a note, reply, resolve/reopen, approval — or (owner only) deletes a note. */
 export async function POST(req: Request, ctx: Ctx) {
   const { g, owner } = await load((await ctx.params).slug);
-  if (!g || (!owner && (g.settings.mode !== "review" || isExpired(g.settings) || !(await canView(g))))) {
+  if (!g || (!owner && (isExpired(g.settings) || !(await canView(g))))) {
     return Response.json({ ok: false, error: "Not found" }, { status: 404 });
   }
   const body = await req.json().catch(() => ({}));
@@ -37,7 +37,7 @@ export async function POST(req: Request, ctx: Ctx) {
   if (!(owner ? [...CLIENT_ACTIONS, "delete"] : CLIENT_ACTIONS).includes(action)) return Response.json({ ok: false, error: "Not allowed" }, { status: 403 });
 
   const fileId = String(body.fileId ?? "");
-  if (!allFiles(g).some((f) => f.id === fileId) && g.cover?.id !== fileId) return Response.json({ ok: false, error: "That file isn't in this gallery" }, { status: 400 });
+  if (!allFiles(g).some((f) => f.id === fileId) && g.cover?.id !== fileId) return Response.json({ ok: false, error: "That file isn't in this project" }, { status: 400 });
 
   const { studio } = await brandFor(g.settings);
   const author = owner ? studio.name : String(body.author ?? "").trim().slice(0, 60);

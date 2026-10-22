@@ -38,10 +38,9 @@ type Job = { key: string; name: string; size: number; folderId?: string; progres
 
 const CONCURRENCY = 3;
 
-type Tab = "files" | "review" | "payment" | "settings" | "activity";
+type Tab = "files" | "payment" | "settings" | "activity";
 const TABS: { id: Tab; label: string }[] = [
   { id: "files", label: "Files" },
-  { id: "review", label: "Review" },
   { id: "payment", label: "Payment & email" },
   { id: "settings", label: "Settings" },
   { id: "activity", label: "Activity" },
@@ -69,7 +68,7 @@ export default function GalleryManager({ gallery, demo, activity, stripe, gmail 
 
   const media = [...(g.cover && !g.items.some((i) => i.id === g.cover!.id) ? [g.cover] : []), ...g.items];
   const coverId = g.cover?.id ?? g.items.find((i) => i.kind === "photo")?.id;
-  const link = g.settings.mode === "review" ? `/review/${g.slug}` : `/g/${g.slug}`;
+  const link = `/g/${g.slug}`;
 
   async function refresh() {
     const res = await api("/api/admin/refresh", { method: "POST", body: JSON.stringify({ galleryId: g.id }) });
@@ -159,18 +158,15 @@ export default function GalleryManager({ gallery, demo, activity, stripe, gmail 
   }
 
   const invite = [
-    g.settings.mode === "review"
-      ? `Hi${g.settings.client ? ` ${g.settings.client}` : ""}! Drafts for "${g.title}" are ready for your review. Leave notes right on the film or photos, and hit Approve on anything that's good to go:`
-      : `Hi${g.settings.client ? ` ${g.settings.client}` : ""}! Your files for "${g.title}" are ready:`,
+    `Hi${g.settings.client ? ` ${g.settings.client}` : ""}! Your files for "${g.title}" are ready:`,
     typeof window !== "undefined" ? `${location.origin}${link}` : link,
     g.settings.password ? `Password: ${g.settings.password}` : "",
     g.settings.expires ? `The gallery is available until ${new Date(`${g.settings.expires}T12:00:00`).toLocaleDateString("en-US", { month: "long", day: "numeric" })}, so download what you need before then.` : "",
-    g.settings.picks && g.settings.mode !== "review" ? "Tap the heart on anything you love and hit “Send picks” when you're done." : "",
+    g.settings.picks ? "Tap the heart on anything you love and hit “Send picks” when you're done." : "",
   ].filter(Boolean).join("\n");
 
   const status = [
     g.hidden ? "Draft — only you can see it" : "Published",
-    g.settings.mode === "review" && "In client review",
     g.expired && "Expired",
     g.settings.hold && "Awaiting payment",
     g.paid && "Paid via Stripe",
@@ -204,7 +200,6 @@ export default function GalleryManager({ gallery, demo, activity, stripe, gmail 
           <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? "on" : ""} onClick={() => pick(t.id)}>
             {t.label}
             {t.id === "files" && <span className="count">{media.length}</span>}
-            {t.id === "review" && g.settings.mode === "review" && <span className="count">On</span>}
             {t.id === "payment" && g.settings.hold && <span className="count">Due</span>}
           </button>
         ))}
@@ -264,7 +259,6 @@ export default function GalleryManager({ gallery, demo, activity, stripe, gmail 
           )}
         </div>
       )}
-      {tab === "review" && <div className="mgr-tab-body"><Review g={g} onSave={save} /></div>}
       {tab === "payment" && (
         <div className="mgr-tab-body">
           <Payment g={g} stripe={stripe} demo={demo} say={say} onChange={paymentChanged} onMarkPaid={markPaid} onSave={save} />
@@ -287,7 +281,7 @@ export default function GalleryManager({ gallery, demo, activity, stripe, gmail 
 
 // ------------------------------------------------------------------ uploader
 
-function Uploader({ galleryId, folderId, targetName, demo, onDone, say }: {
+export function Uploader({ galleryId, folderId, targetName, demo, onDone, say }: {
   galleryId: string; folderId?: string; targetName?: string; demo: boolean; onDone: () => Promise<void> | void; say: (t: string) => void;
 }) {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -405,7 +399,7 @@ function Uploader({ galleryId, folderId, targetName, demo, onDone, say }: {
 
 // ------------------------------------------------------------------ thumbnails
 
-function Thumb({ item, isCover, sections, onCover, onRemove, onRename, onMove }: {
+export function Thumb({ item, isCover, sections, onCover, onRemove, onRename, onMove }: {
   item: MediaItem; isCover: boolean; sections: Section[];
   onCover: () => void; onRemove: () => void; onRename: (name: string) => Promise<boolean>; onMove: (section: string) => void;
 }) {
@@ -884,7 +878,7 @@ function ClientLogo({ g, demo, say, onChange }: { g: G; demo: boolean; say: (t: 
   );
 }
 
-function Danger({ g, demo, say, onDeleted }: { g: G; demo: boolean; say: (t: string) => void; onDeleted: () => void }) {
+export function Danger({ g, demo, say, onDeleted }: { g: G; demo: boolean; say: (t: string) => void; onDeleted: () => void }) {
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
@@ -980,77 +974,6 @@ function SectionHead({ name, count, editable, onRename, onDelete }: {
 }
 
 // ------------------------------------------------------------------ activity
-
-// ------------------------------------------------------------------ review
-
-type RvNote = { id: string; fileId: string; author: string; text: string; t?: number; x?: number; resolved: boolean; owner: boolean; replies: unknown[]; at: string };
-
-function Review({ g, onSave }: { g: G; onSave: (p: Partial<GallerySettings>, msg?: string) => Promise<boolean> }) {
-  const on = g.settings.mode === "review";
-  const [fb, setFb] = useState<{ notes: RvNote[]; approvals: { fileId: string; author: string; at: string }[] } | null>(null);
-  const [busy, setBusy] = useState(false);
-  const files = g.items.filter((i) => i.kind !== "caption");
-
-  useEffect(() => {
-    if (!on) return;
-    let live = true;
-    const load = () => fetch(`/api/review/${g.slug}`, { cache: "no-store" }).then((r) => r.json()).then((r) => live && r.ok && setFb(r)).catch(() => {});
-    load();
-    const t = setInterval(load, 30000);
-    return () => { live = false; clearInterval(t); };
-  }, [on, g.slug]);
-
-  async function flip(mode: "review" | "", msg: string) {
-    setBusy(true);
-    await onSave({ mode } as unknown as Partial<GallerySettings>, msg);
-    setBusy(false);
-  }
-
-  if (!on) {
-    return (
-      <div className="panel">
-        <h3>Client review</h3>
-        <p className="hint" style={{ marginTop: 0 }}>Send drafts for feedback first. Clients leave notes pinned to a moment in a film or a spot on a photo, reply, and approve each file. Previews are watermarked.</p>
-        <button className="btn" disabled={busy} onClick={() => flip("review", "Review mode on. Share the same link for feedback.")}>Switch to review mode</button>
-      </div>
-    );
-  }
-
-  const open = fb?.notes.filter((n) => !n.resolved) ?? [];
-  const approved = new Set(fb?.approvals.map((a) => a.fileId));
-  const nameOf = (id: string) => { const f = files.find((i) => i.id === id); return f ? (f.title ?? f.name.replace(/\.[^.]+$/, "")) : "File"; };
-  const allApproved = files.length > 0 && files.every((f) => approved.has(f.id));
-
-  return (
-    <div className="panel">
-      <h3>Client review</h3>
-      <div className="rv-stats">
-        <span><b>{approved.size}</b>/{files.length} approved</span>
-        <span><b>{open.length}</b> open note{open.length === 1 ? "" : "s"}</span>
-        <span><b>{fb ? fb.notes.length - open.length : 0}</b> resolved</span>
-      </div>
-      {fb === null ? (
-        <p className="hint">Loading feedback…</p>
-      ) : open.length ? (
-        <ul className="rv-mini">
-          {open.map((n) => (
-            <li key={n.id}>
-              <span className="rv-mini-file">{nameOf(n.fileId)}{n.t !== undefined ? ` · ${formatDuration(n.t) || "0:00"}` : n.x !== undefined ? " · pin" : ""}</span>
-              <span className="rv-mini-text"><b>{n.author}:</b> {n.text}</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="hint">{fb.notes.length ? "Every note is resolved." : "No notes yet. Share the gallery link and clients will see the review page."}</p>
-      )}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <a className="btn" href={`/review/${g.slug}`} target="_blank" rel="noreferrer">Open review ↗</a>
-        <button className={`btn ${allApproved ? "primary" : ""}`} disabled={busy} onClick={() => flip("", "Switched to delivery. Clients now see the download page.")}>Switch to delivery</button>
-      </div>
-      {!allApproved && files.length > 0 && <p className="hint" style={{ marginBottom: 0 }}>Upload your finals and switch to delivery once everything is approved. Notes stay saved.</p>}
-    </div>
-  );
-}
 
 function Activity({ items }: { items: ActivityItem[] }) {
   return (

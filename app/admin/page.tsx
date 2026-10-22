@@ -11,7 +11,6 @@ import { isExpired, loadAll, resolveRoot } from "@/lib/galleries";
 import { currentOwner } from "@/lib/owner";
 import { portalLinks } from "@/lib/portal";
 import { loadBrand, type Brand } from "@/lib/brand";
-import { feedbackSummary } from "@/lib/review";
 
 function dueOf(g: GalleryRecord) {
   const paid = new Set(g.paidLinks ?? []);
@@ -44,7 +43,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     const stats = summarize(rows);
     const profiles = (await loadBrand().catch(() => ({ brand: {} as Brand }))).brand.profiles ?? [];
     portals = await portalLinks();
-    const review = records.some((g) => g.settings.mode === "review") ? await feedbackSummary().catch(() => new Map()) : new Map();
     payments = rows
       .filter((r) => r.event === "Paid" || r.event === "Marked paid")
       .slice(0, 6)
@@ -56,7 +54,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         expired: isExpired(g.settings),
         hold: !!g.settings.hold,
         due: g.settings.hold ? dueOf(g) : undefined,
-        review: g.settings.mode === "review" ? { open: review.get(g.id)?.open ?? 0, approved: review.get(g.id)?.approved ?? 0 } : undefined,
         brand: g.settings.brandId ? profiles.find((p) => p.id === g.settings.brandId)?.name : undefined,
         expires: g.settings.expires,
         views: st?.views ?? 0,
