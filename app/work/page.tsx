@@ -7,7 +7,7 @@ import { getStudio } from "@/lib/brand";
 import { showcase, toProject } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: { absolute: "Work · Sow Creative Studios" }, description: "Brand films, event coverage and photography by Sow Creative Studios.", robots: { index: true, follow: true } };
+export const metadata: Metadata = { title: { absolute: "Work · Sow Creative Studios" }, description: "Brand stories, event edits and social versions edited by Sow Creative Studios.", robots: { index: true, follow: true } };
 
 export default async function Work() {
   const studio = await getStudio();
@@ -18,7 +18,7 @@ export default async function Work() {
       <main className="site-main">
         <div className="eyebrow">Portfolio</div>
         <h1 className="serif site-h1">Work</h1>
-        <p className="site-lead">A selection of recent films and photography.</p>
+        <p className="site-lead">A selection of recent edits.</p>
         {work.length ? (
           <div className="site-work">{work.map((p) => <ProjectCard key={p.slug} p={p} />)}</div>
         ) : (

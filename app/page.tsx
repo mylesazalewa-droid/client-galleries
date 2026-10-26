@@ -10,8 +10,8 @@ import { PROCESS, SERVICES, showcase, toProject } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
-  title: { absolute: "Sow Creative Studios · Film & photo in Kalamazoo, Michigan" },
-  description: "Brand films, conference and event video, photography and post-production for organizations across Michigan and beyond.",
+  title: { absolute: "Sow Creative Studios · Video editing in Kalamazoo, Michigan" },
+  description: "Video editing and post-production: brand stories, conference and event edits, social versions, and white-label editing for agencies.",
   robots: { index: true, follow: true },
 };
 
@@ -37,9 +37,9 @@ export default async function Home() {
           )}
         </div>
         <div className="site-hero-text">
-          <div className="eyebrow">Film & photo · Kalamazoo, Michigan</div>
-          <h1 className="serif">Stories worth <em>telling</em>, told well.</h1>
-          <p>Brand films, conference coverage and photography for organizations that care about the people they serve.</p>
+          <div className="eyebrow">Video editing & post-production · Kalamazoo, Michigan</div>
+          <h1 className="serif">Your footage, <em>edited</em> into a story.</h1>
+          <p>Brand stories, conference and event edits, and social versions for organizations and agencies. You send the footage; I shape it into something people finish watching.</p>
           <div className="site-hero-cta">
             <Link href="/contact" className="btn primary">Request a quote</Link>
             <Link href="/work" className="btn ghost">See the work</Link>
@@ -51,7 +51,7 @@ export default async function Home() {
         <section className="site-sec">
           <div className="site-sec-head">
             <div className="eyebrow">What I do</div>
-            <h2 className="serif">From the first call to the final file.</h2>
+            <h2 className="serif">From raw footage to the final file.</h2>
           </div>
           <div className="site-services">
             {SERVICES.map((s, i) => (

@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 
-const TYPES = ["Brand or story film", "Conference or event", "Photography", "Editing only", "Something else"];
+const TYPES = ["Brand or story edit", "Conference or event edit", "Social cuts & versions", "Agency post-production", "Something else"];
 const BUDGETS = ["Not sure yet", "Under $2,500", "$2,500 – $5,000", "$5,000 – $10,000", "$10,000+"];
 
 export default function ContactForm({ initialType }: { initialType?: string }) {
@@ -51,7 +51,7 @@ export default function ContactForm({ initialType }: { initialType?: string }) {
           {BUDGETS.map((b) => <option key={b}>{b}</option>)}
         </select>
       </label>
-      <label className="field"><span>Tell me about the project</span><textarea required value={f.message} onChange={set("message")} rows={6} maxLength={4000} placeholder="What it's for, who it's for, where and when, and anything else that helps." /></label>
+      <label className="field"><span>Tell me about the project</span><textarea required value={f.message} onChange={set("message")} rows={6} maxLength={4000} placeholder="What the footage is (how much, how it was shot), what it's for, the length you want, and anything else that helps." /></label>
       <label className="site-hp" aria-hidden>Website<input tabIndex={-1} autoComplete="off" value={f.website} onChange={set("website")} /></label>
       {error && <p className="error">{error}</p>}
       <button className="btn primary site-submit" disabled={state === "sending"}>{state === "sending" ? "Sending…" : "Send request"}</button>

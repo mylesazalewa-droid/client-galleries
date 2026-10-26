@@ -9,20 +9,22 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: { absolute: "Pricing · Sow Creative Studios" }, description: "Every project is quoted to fit what you need. Here's what's included and what shapes the price.", robots: { index: true, follow: true } };
 
 const FACTORS = [
-  ["Shoot days", "Half day, full day or multiple days on location."],
-  ["Cameras & crew", "One camera and me, or a multi-camera setup for events."],
-  ["Edit length & versions", "One hero film, or cutdowns for social, web and screens."],
+  ["Amount of footage", "An hour of interviews, or several days of multi-camera event coverage."],
+  ["Edit length & versions", "One hero edit, or cutdowns for social, web and screens."],
+  ["Finishing", "Color correction, sound mix, graphics, titles and captions."],
   ["Turnaround", "Standard timing, or rush delivery for next-day use."],
-  ["Travel", "Local to West Michigan, or on the road."],
+  ["Revisions", "How many review rounds are included, spelled out in your quote."],
   ["Music & licensing", "Where and how long you'll use the finished work."],
 ];
 
 const FAQ = [
-  ["How do I get a price?", "Send a few details through the quote form. I'll follow up with questions if needed, then a clear quote with what's included."],
+  ["How do I get a price?", "Send a few details about your footage through the quote form. I'll follow up with questions if needed, then a clear quote with what's included."],
+  ["How do I send footage?", "I'll send you a private upload link, or share a Google Drive, Dropbox or WeTransfer link with the quote request."],
   ["How does payment work?", "Most projects have a deposit to book the date and a final payment at delivery. You can pay online by card right from your gallery."],
   ["How do revisions work?", "You review drafts in a private review page and leave notes right on the video at the exact moment. The number of revision rounds is spelled out in your quote."],
   ["How are files delivered?", "In a private gallery with every format you need, full quality, ready to download and share with your team."],
-  ["Do you work with agencies?", "Yes. I can shoot or edit for your clients and deliver everything under your agency's brand."],
+  ["Do you work with agencies?", "Yes. I edit for your clients and deliver everything, including the review page, under your agency's brand."],
+  ["Do you film?", "My focus is editing and post-production. Send footage from your team or videographer and I'll take it from there."],
 ];
 
 export default async function Pricing() {
